@@ -6,7 +6,8 @@ const ICON_CODES = [
 
 const ICON_H = 129;
 const SPIN_SPEED = 18;
-const RESULT_DELAY_MS = 5200;
+const INITIAL_STOP_DELAY_MS = 1800;
+const STOP_INTERVAL_MS = 1000;
 
 const reelsEl = document.getElementById("reels");
 const drawBtnEl = document.getElementById("drawBtn");
@@ -22,7 +23,7 @@ const drawUrl = window.GT7_DRAW_CONFIG.drawUrl;
 
 let reels = [];
 let animationFrameId = null;
-let finishingTimeoutId = null;
+let finishingTimeoutIds = [];
 let currentResultText = "";
 
 function randomCode() {
@@ -125,16 +126,25 @@ function tick() {
   }
 }
 
-function stopAnimation(codes) {
-  reels.forEach((reel, index) => {
-    const code = codes[index];
-    reel.spinning = false;
-    reel.currentCode = code;
-    reel.targetCode = code;
-    reel.offset = -(codeIndex(code) * ICON_H);
-    reel.codeEl.textContent = code;
-    updateSpritePosition(reel);
+function stopReel(index, code) {
+  const reel = reels[index];
+  if (!reel) {
+    return;
+  }
+
+  reel.spinning = false;
+  reel.currentCode = code;
+  reel.targetCode = code;
+  reel.offset = -(codeIndex(code) * ICON_H);
+  reel.codeEl.textContent = code;
+  updateSpritePosition(reel);
+}
+
+function clearPendingStops() {
+  finishingTimeoutIds.forEach((timeoutId) => {
+    window.clearTimeout(timeoutId);
   });
+  finishingTimeoutIds = [];
 }
 
 function buildResultText(codes, profile, unique) {
@@ -153,6 +163,7 @@ function buildResultText(codes, profile, unique) {
 
 function startClientAnimation(finalCodes) {
   ensureReels(finalCodes.length);
+  clearPendingStops();
 
   reels.forEach((reel) => {
     reel.spinning = true;
@@ -165,10 +176,12 @@ function startClientAnimation(finalCodes) {
     animationFrameId = window.requestAnimationFrame(tick);
   }
 
-  window.clearTimeout(finishingTimeoutId);
-  finishingTimeoutId = window.setTimeout(() => {
-    stopAnimation(finalCodes);
-  }, RESULT_DELAY_MS);
+  finalCodes.forEach((code, index) => {
+    const timeoutId = window.setTimeout(() => {
+      stopReel(index, code);
+    }, INITIAL_STOP_DELAY_MS + (index * STOP_INTERVAL_MS));
+    finishingTimeoutIds.push(timeoutId);
+  });
 }
 
 async function runDraw() {
@@ -195,17 +208,16 @@ async function runDraw() {
     currentResultText = buildResultText(data.codes, data.profile, data.unique);
     resultTextEl.textContent = "Animacja trwa...";
 
+    const totalAnimationMs = INITIAL_STOP_DELAY_MS + ((data.codes.length - 1) * STOP_INTERVAL_MS);
     window.setTimeout(() => {
       resultTextEl.textContent = currentResultText;
       statusEl.textContent = "Losowanie zakończone";
-    }, RESULT_DELAY_MS);
+      drawBtnEl.disabled = false;
+    }, totalAnimationMs);
   } catch (error) {
     statusEl.textContent = "Nie udało się wykonać losowania";
     resultTextEl.textContent = String(error.message || error);
-  } finally {
-    window.setTimeout(() => {
-      drawBtnEl.disabled = false;
-    }, 500);
+    drawBtnEl.disabled = false;
   }
 }
 
