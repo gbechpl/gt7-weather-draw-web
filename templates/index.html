@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>GT7 Weather Draw</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="hero-copy">
+        <p class="eyebrow">GT7 Weather Draw</p>
+        <h1>Webowa maszyna losująca pogodę dla Gran Turismo 7</h1>
+        <p class="lead">
+          Samodzielny projekt przygotowany pod zewnętrzny hosting. Backend losuje wynik,
+          a frontend odtwarza animację slotów w przeglądarce.
+        </p>
+
+        <div class="meta-grid">
+          <article class="meta-card">
+            <strong>3-9</strong>
+            <span>slotów na jedno losowanie</span>
+          </article>
+          <article class="meta-card">
+            <strong>4</strong>
+            <span>dostępne profile pogody</span>
+          </article>
+          <article class="meta-card">
+            <strong>{{ weather_count }}</strong>
+            <span>unikalne kody warunków</span>
+          </article>
+        </div>
+      </div>
+
+      <div class="control-panel">
+        <label class="field">
+          <span>Sloty</span>
+          <select id="slotCount">
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5">5</option>
+            <option value="6">6</option>
+            <option value="7">7</option>
+            <option value="8">8</option>
+            <option value="9" selected>9</option>
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Profil</span>
+          <select id="profile">
+            {% for profile in profiles %}
+            <option value="{{ profile }}" {% if profile == "mixed" %}selected{% endif %}>{{ profile }}</option>
+            {% endfor %}
+          </select>
+        </label>
+
+        <label class="toggle">
+          <input id="unique" type="checkbox" />
+          <span>Unikalne wyniki</span>
+        </label>
+
+        <button id="drawBtn" class="draw-btn" type="button">Losuj pogodę</button>
+        <p id="status" class="status">Gotowy do losowania</p>
+      </div>
+    </section>
+
+    <section class="machine-shell">
+      <div id="reels" class="reels"></div>
+    </section>
+
+    <section class="result-shell">
+      <div class="result-header">
+        <h2>Wynik</h2>
+        <button id="copyBtn" class="copy-btn" type="button">Kopiuj wynik</button>
+      </div>
+      <div id="resultText" class="result-text">Jeszcze nic nie wylosowano.</div>
+    </section>
+  </main>
+
+  <script>
+    window.GT7_DRAW_CONFIG = {
+      drawUrl: "{{ url_for('api_draw') }}",
+      spriteUrl: "{{ url_for('static', filename='icons/sprite_small.png') }}"
+    };
+  </script>
+  <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

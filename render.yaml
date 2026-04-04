@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: gt7-weather-draw-web
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    healthCheckPath: /health
+    autoDeploy: true
