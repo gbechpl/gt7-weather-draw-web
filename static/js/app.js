@@ -8,6 +8,7 @@ const ICON_H = 129;
 const SPIN_SPEED = 18;
 const INITIAL_STOP_DELAY_MS = 1800;
 const STOP_INTERVAL_MS = 1000;
+const STOP_EASE_DURATION_MS = 650;
 
 const reelsEl = document.getElementById("reels");
 const drawBtnEl = document.getElementById("drawBtn");
@@ -84,6 +85,10 @@ function ensureReels(count) {
   }
 }
 
+function resetSpriteTransition(reel) {
+  reel.sprite.style.transition = "none";
+}
+
 function renderStoppedCodes(codes) {
   ensureReels(codes.length);
   codes.forEach((code, index) => {
@@ -93,6 +98,7 @@ function renderStoppedCodes(codes) {
     reel.spinning = false;
     reel.offset = -(codeIndex(code) * ICON_H);
     reel.codeEl.textContent = code;
+    resetSpriteTransition(reel);
     updateSpritePosition(reel);
   });
 }
@@ -135,9 +141,36 @@ function stopReel(index, code) {
   reel.spinning = false;
   reel.currentCode = code;
   reel.targetCode = code;
-  reel.offset = -(codeIndex(code) * ICON_H);
   reel.codeEl.textContent = code;
+
+  const targetOffset = -(codeIndex(code) * ICON_H);
+  const loopHeight = ICON_CODES.length * ICON_H;
+  let easedOffset = reel.offset;
+
+  if (reel.direction >= 0) {
+    while (easedOffset <= targetOffset) {
+      easedOffset += loopHeight;
+    }
+    easedOffset = targetOffset + ((Math.ceil((easedOffset - targetOffset) / loopHeight) * loopHeight) || loopHeight);
+  } else {
+    while (easedOffset > targetOffset) {
+      easedOffset -= loopHeight;
+    }
+    easedOffset -= loopHeight;
+  }
+
+  reel.offset = easedOffset;
+  resetSpriteTransition(reel);
   updateSpritePosition(reel);
+
+  window.requestAnimationFrame(() => {
+    reel.sprite.style.transition = `background-position ${STOP_EASE_DURATION_MS}ms cubic-bezier(0.18, 0.84, 0.32, 1)`;
+    reel.offset = targetOffset;
+    updateSpritePosition(reel);
+    window.setTimeout(() => {
+      resetSpriteTransition(reel);
+    }, STOP_EASE_DURATION_MS + 30);
+  });
 }
 
 function clearPendingStops() {
@@ -170,6 +203,7 @@ function startClientAnimation(finalCodes) {
     reel.direction = Math.random() < 0.5 ? 1 : -1;
     reel.currentCode = randomCode();
     reel.codeEl.textContent = "SPIN";
+    resetSpriteTransition(reel);
   });
 
   if (animationFrameId === null) {
@@ -208,7 +242,11 @@ async function runDraw() {
     currentResultText = buildResultText(data.codes, data.profile, data.unique);
     resultTextEl.textContent = "Animacja trwa...";
 
-    const totalAnimationMs = INITIAL_STOP_DELAY_MS + ((data.codes.length - 1) * STOP_INTERVAL_MS);
+    const totalAnimationMs =
+      INITIAL_STOP_DELAY_MS +
+      ((data.codes.length - 1) * STOP_INTERVAL_MS) +
+      STOP_EASE_DURATION_MS;
+
     window.setTimeout(() => {
       resultTextEl.textContent = currentResultText;
       statusEl.textContent = "Losowanie zakończone";
