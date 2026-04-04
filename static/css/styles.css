@@ -191,9 +191,10 @@ select option {
 
 .reels {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  grid-template-columns: repeat(auto-fit, 118px);
   gap: 14px;
   align-items: start;
+  justify-content: center;
 }
 
 .reel {
@@ -250,6 +251,16 @@ select option {
   color: var(--muted);
 }
 
+.site-footer {
+  margin-top: 18px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
 @media (max-width: 980px) {
   .hero {
     grid-template-columns: 1fr;
@@ -274,6 +285,6 @@ select option {
   }
 
   .reels {
-    grid-template-columns: repeat(2, minmax(118px, 1fr));
+    grid-template-columns: repeat(2, 118px);
   }
 }
