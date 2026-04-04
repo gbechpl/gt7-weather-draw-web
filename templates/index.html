@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>GT7 Weather Draw</title>
+  <title>GT7 Losowanie Pogody</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}" />
 </head>
-<body>
+<body data-theme="ocean">
   <main class="page">
     <section class="hero">
       <div class="hero-copy">
-        <p class="eyebrow">GT7 Weather Draw</p>
+        <p class="eyebrow">GT7 Losowanie Pogody</p>
 
         <div class="meta-grid">
           <article class="meta-card">
@@ -43,11 +43,19 @@
         </label>
 
         <label class="field">
-          <span>Profil</span>
+          <span>Profil pogody</span>
           <select id="profile">
             {% for profile in profiles %}
-            <option value="{{ profile }}" {% if profile == "mixed" %}selected{% endif %}>{{ profile }}</option>
+            <option value="{{ profile.value }}" {% if profile.value == "mixed" %}selected{% endif %}>{{ profile.label }}</option>
             {% endfor %}
+          </select>
+        </label>
+
+        <label class="field">
+          <span>Motyw kolorystyczny</span>
+          <select id="themeSelect">
+            <option value="ocean" selected>Oceaniczny</option>
+            <option value="mono-red">Biały, czarny i czerwony</option>
           </select>
         </label>
 
@@ -73,7 +81,7 @@
       <div id="resultText" class="result-text">Jeszcze nic nie wylosowano.</div>
     </section>
 
-    <footer class="site-footer">Created by Gbech for GTTSC</footer>
+    <footer class="site-footer">Projekt: Gbech dla GTTSC</footer>
   </main>
 
   <script>

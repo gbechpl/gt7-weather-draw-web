@@ -14,6 +14,20 @@
   --reel-h: 129px;
 }
 
+body[data-theme="mono-red"] {
+  --bg: #090203;
+  --bg-soft: #180508;
+  --panel: rgba(26, 7, 10, 0.9);
+  --panel-strong: rgba(39, 10, 15, 0.96);
+  --line: rgba(255, 110, 110, 0.2);
+  --text: #fff3f1;
+  --muted: #d8b3b0;
+  --accent: #ff5a5f;
+  --accent-soft: rgba(255, 90, 95, 0.22);
+  --gold: #ff9b54;
+  --shadow: rgba(0, 0, 0, 0.42);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -24,6 +38,8 @@ html, body {
 }
 
 body {
+  position: relative;
+  color-scheme: dark;
   color: var(--text);
   font-family: Verdana, "Trebuchet MS", Tahoma, sans-serif;
   background:
@@ -31,9 +47,57 @@ body {
     radial-gradient(circle at top right, rgba(109, 226, 255, 0.18), transparent 25%),
     radial-gradient(circle at bottom left, rgba(255, 209, 102, 0.12), transparent 20%),
     linear-gradient(180deg, #08111a 0%, #0b1622 45%, #08111a 100%);
+  background-size: 130% 130%, 140% 140%, 125% 125%, 100% 100%;
+  background-position: 8% 10%, 88% 12%, 14% 86%, 50% 50%;
+}
+
+body[data-theme="mono-red"] {
+  background:
+    radial-gradient(circle at top left, rgba(255, 86, 86, 0.18), transparent 20%),
+    radial-gradient(circle at top right, rgba(255, 138, 101, 0.14), transparent 24%),
+    radial-gradient(circle at 50% 120%, rgba(122, 9, 25, 0.34), transparent 30%),
+    linear-gradient(180deg, #090203 0%, #140306 42%, #090203 100%);
+  background-size: 128% 128%, 138% 138%, 132% 132%, 100% 100%;
+  background-position: 10% 12%, 86% 10%, 52% 88%, 50% 50%;
+}
+
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  inset: -18%;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.9;
+  will-change: transform, opacity, background-position, background-size;
+}
+
+body::before {
+  background:
+    radial-gradient(circle at center, rgba(109, 226, 255, 0.16), transparent 58%),
+    radial-gradient(circle at center, rgba(255, 209, 102, 0.10), transparent 52%),
+    radial-gradient(circle at center, rgba(34, 197, 94, 0.08), transparent 56%);
+  background-repeat: no-repeat;
+  background-size: 36% 36%, 30% 30%, 34% 34%;
+  background-position: -8% 6%, 104% 12%, 6% 108%;
+  filter: blur(14px);
+  animation: floatingFieldsOcean 54s linear infinite;
+}
+
+body::after {
+  background:
+    radial-gradient(circle at center, rgba(109, 226, 255, 0.08), transparent 60%),
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.035), transparent 50%);
+  background-repeat: no-repeat;
+  background-size: 28% 28%, 22% 22%;
+  background-position: 108% 84%, 58% -10%;
+  filter: blur(12px);
+  animation: floatingAccentOcean 72s linear infinite;
 }
 
 .page {
+  position: relative;
+  z-index: 1;
   max-width: 1280px;
   margin: 0 auto;
   padding: 24px;
@@ -104,6 +168,15 @@ h1 {
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+body[data-theme="mono-red"] .meta-card,
+body[data-theme="mono-red"] .result-text,
+body[data-theme="mono-red"] .reel-slot {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
+    rgba(67, 12, 19, 0.56);
+  border-color: rgba(255, 118, 118, 0.18);
+}
+
 .meta-card strong {
   display: block;
   margin-bottom: 6px;
@@ -136,6 +209,8 @@ h1 {
 select,
 .draw-btn,
 .copy-btn {
+  appearance: none;
+  -webkit-appearance: none;
   min-height: 46px;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
@@ -144,13 +219,158 @@ select,
 }
 
 select {
+  color-scheme: dark;
   padding: 0 14px;
   background: rgba(255, 255, 255, 0.06);
 }
 
+.native-select {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.custom-select {
+  position: relative;
+}
+
+.custom-select-trigger,
+.custom-select-option {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  color: var(--text);
+  font: inherit;
+}
+
+.custom-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 0 14px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.custom-select-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.custom-select-arrow {
+  color: var(--muted);
+  font-size: 12px;
+  transition: transform 180ms ease;
+}
+
+.custom-select[data-open="true"] .custom-select-arrow {
+  transform: rotate(180deg);
+}
+
+.custom-select-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 25;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)),
+    var(--panel-strong);
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.custom-select[data-open="true"] .custom-select-menu {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.custom-select-option {
+  min-height: 40px;
+  padding: 0 12px;
+  text-align: left;
+  cursor: pointer;
+  background: rgba(255,255,255,0.03);
+}
+
+.custom-select-option[data-selected="true"] {
+  border-color: rgba(109, 226, 255, 0.28);
+  background: rgba(109, 226, 255, 0.12);
+  color: #ffffff;
+}
+
+.custom-select-option:hover,
+.custom-select-option:focus-visible,
+.custom-select-trigger:hover,
+.custom-select-trigger:focus-visible {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255,255,255,0.09);
+}
+
+body[data-theme="mono-red"] select {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 118, 118, 0.24);
+}
+
+body[data-theme="mono-red"] .custom-select-trigger {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)),
+    rgba(67, 12, 19, 0.42);
+  border-color: rgba(255, 118, 118, 0.24);
+}
+
+body[data-theme="mono-red"] .custom-select-menu {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)),
+    rgba(39, 10, 15, 0.98);
+  border-color: rgba(255, 118, 118, 0.24);
+}
+
+body[data-theme="mono-red"] .custom-select-option {
+  background: rgba(255,255,255,0.02);
+  border-color: rgba(255, 118, 118, 0.14);
+}
+
+body[data-theme="mono-red"] .custom-select-option[data-selected="true"] {
+  border-color: rgba(255, 118, 118, 0.34);
+  background: rgba(255, 90, 95, 0.14);
+}
+
+body[data-theme="mono-red"] .custom-select-option:hover,
+body[data-theme="mono-red"] .custom-select-option:focus-visible,
+body[data-theme="mono-red"] .custom-select-trigger:hover,
+body[data-theme="mono-red"] .custom-select-trigger:focus-visible {
+  border-color: rgba(255, 118, 118, 0.28);
+  background: rgba(255,255,255,0.06);
+}
+
 select option {
-  color: #0b1622;
-  background: #f5fbff;
+  color: #dfeaf5;
+  background: #102031;
+}
+
+body[data-theme="mono-red"] select option {
+  color: #fff3f1;
+  background: #29090e;
 }
 
 .toggle {
@@ -170,6 +390,16 @@ select option {
   background: linear-gradient(135deg, rgba(109, 226, 255, 0.28), rgba(255, 209, 102, 0.16));
 }
 
+body[data-theme="mono-red"] .draw-btn,
+body[data-theme="mono-red"] .copy-btn {
+  background:
+    linear-gradient(135deg, rgba(255, 96, 96, 0.26), rgba(255, 155, 84, 0.14)),
+    rgba(79, 12, 20, 0.85);
+  border-color: rgba(255, 118, 118, 0.26);
+  color: #fff7f7;
+  box-shadow: 0 14px 28px rgba(0, 0, 0, 0.28);
+}
+
 .draw-btn:disabled {
   opacity: 0.65;
   cursor: wait;
@@ -186,6 +416,12 @@ select option {
   overflow: hidden;
   background:
     linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.03)),
+    var(--panel-strong);
+}
+
+body[data-theme="mono-red"] .machine-shell {
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)),
     var(--panel-strong);
 }
 
@@ -259,6 +495,139 @@ select option {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   opacity: 0.8;
+}
+
+@keyframes floatingFieldsOcean {
+  0% {
+    background-position: -8% 6%, 104% 12%, 6% 108%;
+    background-size: 36% 36%, 30% 30%, 34% 34%;
+    opacity: 0.82;
+  }
+  25% {
+    background-position: 34% -8%, 78% 102%, -10% 56%;
+    background-size: 42% 42%, 24% 24%, 30% 30%;
+    opacity: 0.94;
+  }
+  50% {
+    background-position: 102% 28%, -8% 36%, 44% -12%;
+    background-size: 30% 30%, 36% 36%, 40% 40%;
+    opacity: 0.76;
+  }
+  75% {
+    background-position: 58% 104%, 18% -14%, 96% 62%;
+    background-size: 40% 40%, 28% 28%, 32% 32%;
+    opacity: 0.9;
+  }
+  100% {
+    background-position: -8% 6%, 104% 12%, 6% 108%;
+    background-size: 36% 36%, 30% 30%, 34% 34%;
+    opacity: 0.82;
+  }
+}
+
+@keyframes floatingAccentOcean {
+  0% {
+    background-position: 108% 84%, 58% -10%;
+    background-size: 28% 28%, 22% 22%;
+    opacity: 0.38;
+  }
+  33% {
+    background-position: 14% 102%, 104% 18%;
+    background-size: 24% 24%, 20% 20%;
+    opacity: 0.24;
+  }
+  66% {
+    background-position: -12% 24%, 18% 106%;
+    background-size: 30% 30%, 24% 24%;
+    opacity: 0.42;
+  }
+  100% {
+    background-position: 108% 84%, 58% -10%;
+    background-size: 28% 28%, 22% 22%;
+    opacity: 0.38;
+  }
+}
+
+body[data-theme="mono-red"]::before {
+  background:
+    radial-gradient(circle at center, rgba(255, 90, 95, 0.18), transparent 58%),
+    radial-gradient(circle at center, rgba(255, 155, 84, 0.11), transparent 52%),
+    radial-gradient(circle at center, rgba(122, 9, 25, 0.18), transparent 56%);
+  background-repeat: no-repeat;
+  background-size: 38% 38%, 28% 28%, 36% 36%;
+  background-position: -10% 8%, 102% 10%, 46% 108%;
+  filter: blur(14px);
+  animation: floatingFieldsRed 50s linear infinite;
+}
+
+body[data-theme="mono-red"]::after {
+  background:
+    radial-gradient(circle at center, rgba(255, 90, 95, 0.08), transparent 60%),
+    radial-gradient(circle at center, rgba(255, 170, 170, 0.04), transparent 50%);
+  background-repeat: no-repeat;
+  background-size: 30% 30%, 22% 22%;
+  background-position: 104% 78%, 54% -12%;
+  filter: blur(12px);
+  animation: floatingAccentRed 68s linear infinite;
+}
+
+@keyframes floatingFieldsRed {
+  0% {
+    background-position: -10% 8%, 102% 10%, 46% 108%;
+    background-size: 38% 38%, 28% 28%, 36% 36%;
+    opacity: 0.86;
+  }
+  25% {
+    background-position: 28% -10%, 72% 102%, 102% 58%;
+    background-size: 42% 42%, 24% 24%, 30% 30%;
+    opacity: 0.94;
+  }
+  50% {
+    background-position: 104% 30%, -12% 42%, 24% -12%;
+    background-size: 30% 30%, 34% 34%, 40% 40%;
+    opacity: 0.78;
+  }
+  75% {
+    background-position: 56% 106%, 12% -14%, -8% 64%;
+    background-size: 40% 40%, 26% 26%, 34% 34%;
+    opacity: 0.92;
+  }
+  100% {
+    background-position: -10% 8%, 102% 10%, 46% 108%;
+    background-size: 38% 38%, 28% 28%, 36% 36%;
+    opacity: 0.86;
+  }
+}
+
+@keyframes floatingAccentRed {
+  0% {
+    background-position: 104% 78%, 54% -12%;
+    background-size: 30% 30%, 22% 22%;
+    opacity: 0.34;
+  }
+  33% {
+    background-position: 10% 102%, 102% 14%;
+    background-size: 24% 24%, 20% 20%;
+    opacity: 0.22;
+  }
+  66% {
+    background-position: -14% 28%, 14% 104%;
+    background-size: 32% 32%, 24% 24%;
+    opacity: 0.4;
+  }
+  100% {
+    background-position: 104% 78%, 54% -12%;
+    background-size: 30% 30%, 22% 22%;
+    opacity: 0.34;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body,
+  body::before,
+  body::after {
+    animation: none;
+  }
 }
 
 @media (max-width: 980px) {

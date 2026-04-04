@@ -17,6 +17,7 @@ const statusEl = document.getElementById("status");
 const resultTextEl = document.getElementById("resultText");
 const slotCountEl = document.getElementById("slotCount");
 const profileEl = document.getElementById("profile");
+const themeSelectEl = document.getElementById("themeSelect");
 const uniqueEl = document.getElementById("unique");
 
 const spriteUrl = window.GT7_DRAW_CONFIG.spriteUrl;
@@ -26,6 +27,163 @@ let reels = [];
 let animationFrameId = null;
 let finishingTimeoutIds = [];
 let currentResultText = "";
+const THEME_STORAGE_KEY = "gt7-draw-theme";
+const customSelects = new Map();
+
+function closeCustomSelects(exceptSelect = null) {
+  customSelects.forEach((customSelect, select) => {
+    if (select === exceptSelect) {
+      return;
+    }
+    customSelect.root.dataset.open = "false";
+    customSelect.trigger.setAttribute("aria-expanded", "false");
+  });
+}
+
+function syncCustomSelect(select) {
+  const customSelect = customSelects.get(select);
+  if (!customSelect) {
+    return;
+  }
+
+  const selectedOption = select.options[select.selectedIndex];
+  customSelect.triggerLabel.textContent = selectedOption?.text || "";
+
+  customSelect.options.forEach((optionButton) => {
+    const isSelected = optionButton.dataset.value === select.value;
+    optionButton.dataset.selected = isSelected ? "true" : "false";
+    optionButton.setAttribute("aria-selected", isSelected ? "true" : "false");
+  });
+}
+
+function createCustomSelect(select) {
+  const root = document.createElement("div");
+  root.className = "custom-select";
+  root.dataset.open = "false";
+
+  const trigger = document.createElement("button");
+  trigger.type = "button";
+  trigger.className = "custom-select-trigger";
+  trigger.setAttribute("aria-expanded", "false");
+
+  const triggerLabel = document.createElement("span");
+  triggerLabel.className = "custom-select-label";
+
+  const triggerArrow = document.createElement("span");
+  triggerArrow.className = "custom-select-arrow";
+  triggerArrow.setAttribute("aria-hidden", "true");
+  triggerArrow.textContent = "▾";
+
+  trigger.appendChild(triggerLabel);
+  trigger.appendChild(triggerArrow);
+
+  const menu = document.createElement("div");
+  menu.className = "custom-select-menu";
+
+  const optionButtons = Array.from(select.options).map((option) => {
+    const optionButton = document.createElement("button");
+    optionButton.type = "button";
+    optionButton.className = "custom-select-option";
+    optionButton.textContent = option.text;
+    optionButton.dataset.value = option.value;
+    optionButton.setAttribute("role", "option");
+
+    optionButton.addEventListener("click", () => {
+      if (select.value !== option.value) {
+        select.value = option.value;
+        select.dispatchEvent(new Event("change", { bubbles: true }));
+      } else {
+        syncCustomSelect(select);
+      }
+      closeCustomSelects();
+    });
+
+    menu.appendChild(optionButton);
+    return optionButton;
+  });
+
+  trigger.addEventListener("click", () => {
+    const isOpen = root.dataset.open === "true";
+    if (isOpen) {
+      closeCustomSelects();
+      return;
+    }
+    closeCustomSelects(select);
+    root.dataset.open = "true";
+    trigger.setAttribute("aria-expanded", "true");
+  });
+
+  root.appendChild(trigger);
+  root.appendChild(menu);
+
+  select.classList.add("native-select");
+  select.setAttribute("tabindex", "-1");
+  select.setAttribute("aria-hidden", "true");
+  select.insertAdjacentElement("afterend", root);
+
+  const customSelect = {
+    root,
+    trigger,
+    triggerLabel,
+    options: optionButtons,
+  };
+
+  customSelects.set(select, customSelect);
+  select.addEventListener("change", () => {
+    syncCustomSelect(select);
+  });
+  syncCustomSelect(select);
+}
+
+function initCustomSelects() {
+  [slotCountEl, profileEl, themeSelectEl].forEach((select) => {
+    if (select) {
+      createCustomSelect(select);
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) {
+      closeCustomSelects();
+      return;
+    }
+
+    const clickedInside = Array.from(customSelects.values()).some(({ root }) => root.contains(event.target));
+    if (!clickedInside) {
+      closeCustomSelects();
+    }
+  });
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeCustomSelects();
+    }
+  });
+}
+
+function applyTheme(themeName) {
+  const selectedTheme = themeName === "mono-red" ? "mono-red" : "ocean";
+  document.body.dataset.theme = selectedTheme;
+  if (themeSelectEl) {
+    themeSelectEl.value = selectedTheme;
+    syncCustomSelect(themeSelectEl);
+  }
+  try {
+    window.localStorage.setItem(THEME_STORAGE_KEY, selectedTheme);
+  } catch (_error) {
+    // Ignore storage failures and keep the current theme in memory only.
+  }
+}
+
+function initTheme() {
+  let savedTheme = "ocean";
+  try {
+    savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY) || "ocean";
+  } catch (_error) {
+    savedTheme = "ocean";
+  }
+  applyTheme(savedTheme);
+}
 
 function randomCode() {
   return ICON_CODES[Math.floor(Math.random() * ICON_CODES.length)];
@@ -179,14 +337,18 @@ function clearPendingStops() {
 }
 
 function buildResultText(codes, profile, unique) {
+  const selectedProfileLabel =
+    profileEl ?
+      Array.from(profileEl.options).find((option) => option.value === profile)?.text || profile
+      : profile;
   const lines = [
-    `Profil: ${profile}`,
-    `Unique: ${unique ? "tak" : "nie"}`,
+    `Profil: ${selectedProfileLabel}`,
+    `Unikalne wyniki: ${unique ? "tak" : "nie"}`,
     ""
   ];
 
   codes.forEach((code, index) => {
-    lines.push(`Slot ${index + 1}: ${code}`);
+    lines.push(`Pole ${index + 1}: ${code}`);
   });
 
   return lines.join("\n");
@@ -200,7 +362,7 @@ function startClientAnimation(finalCodes) {
     reel.spinning = true;
     reel.direction = Math.random() < 0.5 ? 1 : -1;
     reel.currentCode = randomCode();
-    reel.codeEl.textContent = "SPIN";
+    reel.codeEl.textContent = "LOS";
     resetSpriteTransition(reel);
   });
 
@@ -272,4 +434,11 @@ async function copyResult() {
 
 drawBtnEl.addEventListener("click", runDraw);
 copyBtnEl.addEventListener("click", copyResult);
+if (themeSelectEl) {
+  themeSelectEl.addEventListener("change", (event) => {
+    applyTheme(event.target.value);
+  });
+}
+initCustomSelects();
+initTheme();
 renderStoppedCodes(["S01", "C01", "R01", "S05", "R07", "C03", "S12", "S17", "R02"]);
