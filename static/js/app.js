@@ -7,7 +7,7 @@ const ICON_CODES = [
 const ICON_H = 129;
 const SPIN_SPEED = 18;
 const INITIAL_STOP_DELAY_MS = 1800;
-const STOP_INTERVAL_MS = 1000;
+const STOP_INTERVAL_MS = 600;
 const STOP_EASE_DURATION_MS = 650;
 
 const reelsEl = document.getElementById("reels");
@@ -151,12 +151,10 @@ function stopReel(index, code) {
     while (easedOffset <= targetOffset) {
       easedOffset += loopHeight;
     }
-    easedOffset = targetOffset + ((Math.ceil((easedOffset - targetOffset) / loopHeight) * loopHeight) || loopHeight);
   } else {
-    while (easedOffset > targetOffset) {
+    while (easedOffset >= targetOffset) {
       easedOffset -= loopHeight;
     }
-    easedOffset -= loopHeight;
   }
 
   reel.offset = easedOffset;
