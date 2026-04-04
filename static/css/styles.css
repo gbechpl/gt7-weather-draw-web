@@ -148,6 +148,11 @@ select {
   background: rgba(255, 255, 255, 0.06);
 }
 
+select option {
+  color: #0b1622;
+  background: #f5fbff;
+}
+
 .toggle {
   grid-template-columns: 20px 1fr;
   align-items: center;
