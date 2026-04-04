@@ -26,6 +26,16 @@
             <span>unikalne kody warunków</span>
           </article>
         </div>
+
+        <div class="hero-theme">
+          <label class="field">
+            <span>Motyw kolorystyczny</span>
+            <select id="themeSelect">
+              <option value="ocean" selected>Oceaniczny</option>
+              <option value="mono-red">Biały, czarny i czerwony</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       <div class="control-panel">
@@ -48,14 +58,6 @@
             {% for profile in profiles %}
             <option value="{{ profile.value }}" {% if profile.value == "mixed" %}selected{% endif %}>{{ profile.label }}</option>
             {% endfor %}
-          </select>
-        </label>
-
-        <label class="field">
-          <span>Motyw kolorystyczny</span>
-          <select id="themeSelect">
-            <option value="ocean" selected>Oceaniczny</option>
-            <option value="mono-red">Biały, czarny i czerwony</option>
           </select>
         </label>
 
