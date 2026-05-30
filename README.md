@@ -33,6 +33,53 @@ Strona będzie dostępna pod:
 http://127.0.0.1:8000
 ```
 
+## ESP32-S3 i WebREPL
+
+Plik `boot.py` uruchamia WebREPL automatycznie po starcie płytki.
+
+Jeśli WebREPL nie ma jeszcze ustawionego hasła, uruchom na ESP32 jednorazowo `webrepl_setup` i ustaw hasło przez konsolę MicroPythona.
+
+## Lokalny bot do testów
+
+Plik `bot_vs.py` uruchamia bota Discord lokalnie z VS Code i pobiera gotowy obraz z Rendera.
+
+Uruchom:
+
+```bash
+python bot_vs.py
+```
+
+Do testu lokalnego:
+
+```bash
+python bot_vs.py --local
+```
+
+Wymaga to:
+- `DISCORD_TOKEN`
+- `WEB_SERVICE_URL`
+- włączenia `Message Content Intent` w Discord Developer Portal, jeśli używasz komendy tekstowej `!pogoda`
+
+Jeśli chcesz odpalać stronę lokalnie, ustaw:
+
+```bash
+set GT7_USE_LOCAL_WEB_SERVICE=true
+python app.py
+python bot_vs.py
+```
+
+Wtedy bot będzie brał PNG z `http://127.0.0.1:8000` zamiast z Rendera.
+
+Przydatna komenda diagnostyczna:
+
+```text
+!status
+```
+
+Ta komenda pobiera PNG z web service i odsyła go na kanał, więc szybko pokaże, czy połączenie działa.
+
+Możesz też uruchomić całość jednym kliknięciem przez `run_local.bat`.
+
 ## Deployment na Render
 
 Projekt jest przygotowany pod Render Web Service.
@@ -73,6 +120,62 @@ Endpoint zdrowia:
 
 ```text
 /health
+```
+
+## Budzenie Rendera co 10 minut
+
+Free web service na Renderze usypia po 15 minutach bez ruchu. Żeby go utrzymać aktywnego, ustaw zewnętrzny monitor, który będzie pingował:
+
+```text
+/keepalive
+```
+
+albo:
+
+```text
+/ping
+```
+
+Interwał 10 minut jest bezpieczny, bo jest krótszy niż limit bezczynności.
+
+### Lokalny pinger
+
+W repo jest prosty skrypt:
+
+```text
+keepalive_ping.py
+```
+
+Możesz go uruchamiać ręcznie albo przez Harmonogram zadań / cron:
+
+```bash
+python keepalive_ping.py
+```
+
+Na Windows najprościej ustawić zadanie cykliczne co 10 minut. Na Linuxie / serwerze:
+
+```cron
+*/10 * * * * /usr/bin/python3 /sciezka/do/gt7_weather_draw_web/keepalive_ping.py
+```
+
+Jeśli Render ma inny adres, podaj go parametrem:
+
+```bash
+python keepalive_ping.py --url https://twoj-serwis.onrender.com/keepalive
+```
+
+### Keepalive w bocie Discord
+
+Jeśli bot działa cały czas, może sam pingować Rendera w tle. Ustaw:
+
+- `KEEPALIVE_URL=https://twoj-serwis.onrender.com/keepalive`
+- `KEEPALIVE_ENABLED=1`
+- opcjonalnie `KEEPALIVE_INTERVAL_SECONDS=600`
+
+Jeśli chcesz wyłączyć ping, ustaw:
+
+```text
+KEEPALIVE_ENABLED=0
 ```
 
 ## API

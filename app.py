@@ -121,6 +121,14 @@ def health():
     return jsonify({"ok": True})
 
 
+@app.get("/keepalive")
+@app.get("/ping")
+def keepalive():
+    response = jsonify({"ok": True})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
 @app.route("/api/draw", methods=["GET", "POST"])
 @app.route("/api/draw/start", methods=["GET", "POST"])
 def api_draw():

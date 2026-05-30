@@ -52,6 +52,24 @@ FONT_5X7 = {
     "Z": ["11111", "00001", "00010", "00100", "01000", "10000", "11111"],
 }
 
+FONT_5X7_ROUNDED = {
+    " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+    "0": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+    "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+    "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+    "3": ["11110", "00001", "00001", "00110", "00001", "00001", "11110"],
+    "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+    "5": ["11111", "10000", "10000", "11110", "00001", "00001", "11110"],
+    "6": ["01110", "10000", "10000", "11110", "10001", "10001", "01110"],
+    "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+    "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+    "9": ["01110", "10001", "10001", "01111", "00001", "00001", "01110"],
+    "L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
+    "O": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
+    "S": ["01111", "10000", "10000", "01110", "00001", "00001", "11110"],
+    "T": ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
+}
+
 
 def _decode_png_rgba(png_bytes: bytes) -> tuple[int, int, bytes]:
     if not png_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -256,6 +274,80 @@ def _stroke_rect(
         _set_pixel(pixels, width, height, x + rect_width - 1, row, color)
 
 
+def _fill_rounded_rect(
+    pixels: bytearray,
+    width: int,
+    height: int,
+    x: int,
+    y: int,
+    rect_width: int,
+    rect_height: int,
+    radius: int,
+    color: tuple[int, int, int, int],
+) -> None:
+    radius = max(0, min(radius, rect_width // 2, rect_height // 2))
+    radius_sq = radius * radius
+    for row in range(y, y + rect_height):
+        for column in range(x, x + rect_width):
+            dx = 0
+            dy = 0
+            if column < x + radius:
+                dx = (x + radius - 1) - column
+            elif column >= x + rect_width - radius:
+                dx = column - (x + rect_width - radius)
+            if row < y + radius:
+                dy = (y + radius - 1) - row
+            elif row >= y + rect_height - radius:
+                dy = row - (y + rect_height - radius)
+            if dx * dx + dy * dy <= radius_sq:
+                _set_pixel(pixels, width, height, column, row, color)
+
+
+def _stroke_rounded_rect(
+    pixels: bytearray,
+    width: int,
+    height: int,
+    x: int,
+    y: int,
+    rect_width: int,
+    rect_height: int,
+    radius: int,
+    color: tuple[int, int, int, int],
+) -> None:
+    radius = max(0, min(radius, rect_width // 2, rect_height // 2))
+    radius_sq = radius * radius
+    inner_radius = max(radius - 1, 0)
+    inner_radius_sq = inner_radius * inner_radius
+    for row in range(y, y + rect_height):
+        for column in range(x, x + rect_width):
+            outer_dx = 0
+            outer_dy = 0
+            if column < x + radius:
+                outer_dx = (x + radius - 1) - column
+            elif column >= x + rect_width - radius:
+                outer_dx = column - (x + rect_width - radius)
+            if row < y + radius:
+                outer_dy = (y + radius - 1) - row
+            elif row >= y + rect_height - radius:
+                outer_dy = row - (y + rect_height - radius)
+
+            inner_dx = 0
+            inner_dy = 0
+            if column < x + inner_radius:
+                inner_dx = (x + inner_radius - 1) - column
+            elif column >= x + rect_width - inner_radius:
+                inner_dx = column - (x + rect_width - inner_radius)
+            if row < y + inner_radius:
+                inner_dy = (y + inner_radius - 1) - row
+            elif row >= y + rect_height - inner_radius:
+                inner_dy = row - (y + rect_height - inner_radius)
+
+            inside_outer = outer_dx * outer_dx + outer_dy * outer_dy <= radius_sq
+            inside_inner = inner_dx * inner_dx + inner_dy * inner_dy <= inner_radius_sq
+            if inside_outer and not inside_inner:
+                _set_pixel(pixels, width, height, column, row, color)
+
+
 def _draw_text(
     pixels: bytearray,
     width: int,
@@ -265,14 +357,30 @@ def _draw_text(
     text: str,
     color: tuple[int, int, int, int],
     scale: int = 2,
+    font: dict[str, list[str]] = FONT_5X7,
+    edge_alpha: int | None = None,
 ) -> None:
     cursor_x = x
     for character in text.upper():
-        pattern = FONT_5X7.get(character, FONT_5X7[" "])
+        pattern = font.get(character, font[" "])
         for row_index, pattern_row in enumerate(pattern):
             for column_index, bit in enumerate(pattern_row):
                 if bit != "1":
                     continue
+                pixel_alpha = color[3]
+                if edge_alpha is not None:
+                    neighbors = 0
+                    for neighbor_row, neighbor_col in (
+                        (row_index - 1, column_index),
+                        (row_index + 1, column_index),
+                        (row_index, column_index - 1),
+                        (row_index, column_index + 1),
+                    ):
+                        if 0 <= neighbor_row < len(pattern) and 0 <= neighbor_col < len(pattern[0]):
+                            if pattern[neighbor_row][neighbor_col] == "1":
+                                neighbors += 1
+                    if neighbors <= 2:
+                        pixel_alpha = edge_alpha
                 for scaled_y in range(scale):
                     for scaled_x in range(scale):
                         _set_pixel(
@@ -281,7 +389,7 @@ def _draw_text(
                             height,
                             cursor_x + column_index * scale + scaled_x,
                             y + row_index * scale + scaled_y,
-                            color,
+                            (color[0], color[1], color[2], pixel_alpha),
                         )
         cursor_x += (5 * scale) + scale
 
@@ -348,65 +456,101 @@ def render_weather_draw_png(
         raise ValueError("unexpected_sprite_dimensions")
 
     slot_count = len(codes)
-    card_width = 136
-    card_height = 214
-    gap = 12
-    padding = 24
-    header_height = 96
-    canvas_width = padding * 2 + slot_count * card_width + max(slot_count - 1, 0) * gap
-    canvas_height = padding * 2 + header_height + card_height
+    card_width = 118
+    card_height = 160
+    label_height = 22
+    card_gap = 18
+    card_radius = 22
+    outer_padding_x = 16
+    outer_padding_y = 16
+    panel_padding_x = 24
+    panel_padding_y = 18
+    canvas_width = outer_padding_x * 2 + panel_padding_x * 2 + slot_count * card_width + max(slot_count - 1, 0) * card_gap
+    canvas_height = 218
 
-    pixels = _new_canvas(canvas_width, canvas_height, (8, 17, 26, 255))
-
+    pixels = _new_canvas(canvas_width, canvas_height, (8, 16, 26, 255))
     accent = _profile_accent(profile)
-    _fill_rect(pixels, canvas_width, canvas_height, 0, 0, canvas_width, 10, accent)
-    _fill_rect(pixels, canvas_width, canvas_height, 0, 10, canvas_width, 1, (255, 255, 255, 24))
-    _fill_rect(pixels, canvas_width, canvas_height, 0, 11, canvas_width, header_height - 11, (12, 22, 36, 255))
-    _fill_rect(pixels, canvas_width, canvas_height, 0, header_height, canvas_width, canvas_height - header_height, (6, 13, 21, 255))
 
-    _draw_text(pixels, canvas_width, canvas_height, padding, 24, "WYNIK LOSOWANIA", (245, 251, 255, 255), scale=3)
-    _draw_text(pixels, canvas_width, canvas_height, padding, 58, f"PROFILE {profile.upper()}", accent, scale=2)
-    _draw_text(
+    # Outer background glow and the main panel that matches the live page.
+    _fill_rect(pixels, canvas_width, canvas_height, 0, 0, canvas_width, canvas_height, (8, 16, 26, 255))
+    _fill_rounded_rect(
         pixels,
         canvas_width,
         canvas_height,
-        padding + 260,
-        58,
-        f"UNIQUE {'YES' if unique else 'NO'}",
-        (235, 243, 250, 255),
-        scale=2,
+        outer_padding_x,
+        outer_padding_y,
+        canvas_width - outer_padding_x * 2,
+        canvas_height - outer_padding_y * 2,
+        24,
+        (18, 28, 44, 255),
     )
-    _draw_text(
+    _stroke_rounded_rect(
         pixels,
         canvas_width,
         canvas_height,
-        padding + 470,
-        58,
-        f"SLOTS {slot_count}",
-        (235, 243, 250, 255),
-        scale=2,
+        outer_padding_x,
+        outer_padding_y,
+        canvas_width - outer_padding_x * 2,
+        canvas_height - outer_padding_y * 2,
+        24,
+        (74, 100, 128, 255),
     )
-
-    card_top = padding + header_height
+    card_top = outer_padding_y + panel_padding_y - 6
     for index, code in enumerate(codes):
-        card_left = padding + index * (card_width + gap)
-        shadow_color = (0, 0, 0, 72)
-        _fill_rect(pixels, canvas_width, canvas_height, card_left + 5, card_top + 6, card_width, card_height, shadow_color)
-        _fill_rect(pixels, canvas_width, canvas_height, card_left, card_top, card_width, card_height, (15, 27, 41, 255))
-        _stroke_rect(pixels, canvas_width, canvas_height, card_left, card_top, card_width, card_height, (255, 255, 255, 24))
-        _fill_rect(pixels, canvas_width, canvas_height, card_left, card_top, card_width, 10, accent)
-
-        badge_color = (255, 255, 255, 255)
-        _draw_text(pixels, canvas_width, canvas_height, card_left + 12, card_top + 18, str(index + 1), badge_color, scale=2)
+        card_left = outer_padding_x + panel_padding_x + index * (card_width + card_gap)
+        shadow_color = (0, 0, 0, 76)
+        _fill_rounded_rect(
+            pixels,
+            canvas_width,
+            canvas_height,
+            card_left + 3,
+            card_top + 4,
+            card_width,
+            card_height,
+            card_radius,
+            shadow_color,
+        )
+        _fill_rounded_rect(
+            pixels,
+            canvas_width,
+            canvas_height,
+            card_left,
+            card_top,
+            card_width,
+            card_height,
+            card_radius,
+            (16, 22, 34, 255),
+        )
+        _stroke_rounded_rect(
+            pixels,
+            canvas_width,
+            canvas_height,
+            card_left,
+            card_top,
+            card_width,
+            card_height,
+            card_radius,
+            (84, 100, 120, 255),
+        )
 
         tile_index = SPRITE_INDEX.get(code)
         if tile_index is None:
             raise ValueError(f"unknown_weather_code:{code}")
         tile = _extract_sprite_tile(sprite_pixels, sprite_width, tile_index)
-        tile_x = card_left + ((card_width - SPRITE_WIDTH) // 2)
-        tile_y = card_top + 34
+        tile_x = card_left + 2
+        tile_y = card_top + 2
         _blit_rgba(pixels, canvas_width, canvas_height, tile, SPRITE_WIDTH, SPRITE_HEIGHT, tile_x, tile_y)
 
-        _draw_text(pixels, canvas_width, canvas_height, card_left + 32, card_top + 170, code, accent, scale=2)
+        _draw_text(
+            pixels,
+            canvas_width,
+            canvas_height,
+            card_left + 23,
+            card_top + 138,
+            f"Slot {index + 1}",
+            (255, 255, 255, 255),
+            scale=2,
+            font=FONT_5X7_ROUNDED,
+        )
 
     return _encode_png_rgba(canvas_width, canvas_height, bytes(pixels))
