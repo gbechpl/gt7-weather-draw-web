@@ -58,7 +58,7 @@ Ustaw:
 ```text
 Runtime: Python 3
 Build Command: pip install -r requirements.txt
-Start Command: gunicorn app:app
+Start Command: gunicorn app:app --bind 0.0.0.0:$PORT
 ```
 
 ### Zmienne środowiskowe
@@ -100,3 +100,37 @@ Odpowiedź:
   "codes": ["S03", "C01", "R07"]
 }
 ```
+
+### `GET /api/draw` albo `POST /api/draw/start`
+
+Endpoint przyjmuje też dane z query string, formularza lub JSON, więc jest wygodny dla bota Discorda.
+
+Przykład z query string:
+
+```text
+/api/draw/start?slot_count=6&profile=wet&unique=true
+```
+
+Przykład z JSON:
+
+```json
+{
+  "slot_count": 6,
+  "profile": "wet",
+  "unique": true
+}
+```
+
+W odpowiedzi dostaniesz ten sam format z polem `codes`, więc bot może od razu wysłać wynik na kanał albo dalej go przetworzyć.
+
+### `GET /api/draw/image` albo `POST /api/draw/png`
+
+To samo losowanie, ale wynik wraca jako plik `PNG` z ikonami i slotami pogodowymi.
+
+Przykład:
+
+```text
+/api/draw/image?slot_count=6&profile=wet&unique=true
+```
+
+Ten wariant jest wygodny dla bota Discorda, bo można go pobrać i wysłać jako załącznik obrazu bez żadnego dodatkowego renderowania po stronie klienta.

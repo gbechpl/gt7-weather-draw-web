@@ -261,6 +261,20 @@ function renderStoppedCodes(codes) {
   });
 }
 
+function resetAnimationState() {
+  clearPendingStops();
+
+  if (animationFrameId !== null) {
+    window.cancelAnimationFrame(animationFrameId);
+    animationFrameId = null;
+  }
+
+  reels.forEach((reel) => {
+    reel.spinning = false;
+    resetSpriteTransition(reel);
+  });
+}
+
 function tick() {
   let stillSpinning = false;
 
@@ -389,7 +403,8 @@ async function runDraw() {
       body: JSON.stringify({
         slot_count: Number(slotCountEl.value || 9),
         profile: String(profileEl.value || "mixed"),
-        unique: Boolean(uniqueEl.checked)
+        unique: Boolean(uniqueEl.checked),
+        animate: true
       })
     });
 
@@ -398,8 +413,17 @@ async function runDraw() {
       throw new Error(data.detail || data.error || "draw_failed");
     }
 
-    startClientAnimation(data.codes);
     currentResultText = buildResultText(data.codes, data.profile, data.unique);
+    if (data.animate === false) {
+      resetAnimationState();
+      renderStoppedCodes(data.codes);
+      resultTextEl.textContent = currentResultText;
+      statusEl.textContent = "Losowanie zakończone";
+      drawBtnEl.disabled = false;
+      return;
+    }
+
+    startClientAnimation(data.codes);
     resultTextEl.textContent = "Animacja trwa...";
 
     const totalAnimationMs =
