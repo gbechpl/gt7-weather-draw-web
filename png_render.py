@@ -504,10 +504,7 @@ def render_weather_draw_png(
     panel_padding_y = 18
     canvas_width = outer_padding_x * 2 + panel_padding_x * 2 + slot_count * card_width + max(slot_count - 1, 0) * card_gap
     canvas_height = 218
-    title_text = "WEATHER GENERATOR for GT7"
     footer_text = "Created by Gbech for GTSC"
-    title_x = max(outer_padding_x + 8, (canvas_width - len(title_text) * 6) // 2)
-    title_y = 8
     footer_x = canvas_width - (len(footer_text) * 4) - 6
     footer_y = canvas_height - 11
 
@@ -537,19 +534,6 @@ def render_weather_draw_png(
         canvas_height - outer_padding_y * 2,
         24,
         (74, 100, 128, 255),
-    )
-
-    _draw_text(
-        pixels,
-        canvas_width,
-        canvas_height,
-        title_x,
-        title_y,
-        title_text,
-        accent,
-        scale=1,
-        font=FONT_5X7_ROUNDED,
-        edge_alpha=140,
     )
 
     card_top = outer_padding_y + panel_padding_y - 6
