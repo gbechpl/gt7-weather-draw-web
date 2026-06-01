@@ -94,12 +94,16 @@ def resolve_draw_context() -> tuple[dict | None, tuple[Response, int] | None]:
     except ValueError:
         return None, (jsonify({"error": "invalid_animate"}), 400)
 
+    seed_value = payload.get("seed")
+    seed = None if seed_value is None or seed_value == "" else str(seed_value).strip()
+
     return {
         "payload": payload,
         "slot_count": slot_count,
         "profile": profile,
         "unique": unique,
         "animate": animate,
+        "seed": seed,
     }, None
 
 
@@ -147,6 +151,7 @@ def api_draw():
             unique=unique,
             profile=profile,
             fixed_slots={},
+            seed=context["seed"],
         )
     except ValueError as exc:
         return jsonify({"error": "draw_failed", "detail": str(exc)}), 400
@@ -178,6 +183,7 @@ def api_draw_image():
             unique=context["unique"],
             profile=context["profile"],
             fixed_slots={},
+            seed=context["seed"],
         )
     except ValueError as exc:
         return jsonify({"error": "draw_failed", "detail": str(exc)}), 400

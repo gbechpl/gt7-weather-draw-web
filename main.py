@@ -25,27 +25,18 @@ except Exception as exc:
 log("START main.py")
 log("CONFIG LOADED")
 
-log("CONFIG: WIFI_SSID")
 WIFI_SSID = config.WIFI_SSID
-log("CONFIG: WIFI_PASS")
 WIFI_PASS = config.WIFI_PASS
-log("CONFIG: DISCORD_TOKEN")
 DISCORD_TOKEN = config.DISCORD_TOKEN
-log("CONFIG: WEB_SERVICE_URL")
 WEB_SERVICE_URL = config.WEB_SERVICE_URL.rstrip("/")
-log("CONFIG: KEEPALIVE_URL")
-KEEPALIVE_URL = getattr(
-    config, "KEEPALIVE_URL", WEB_SERVICE_URL.rstrip("/") + "/keepalive"
-)
-log("CONFIG: KEEPALIVE_INTERVAL_MS")
+KEEPALIVE_URL = getattr(config, "KEEPALIVE_URL", WEB_SERVICE_URL.rstrip("/") + "/keepalive")
 KEEPALIVE_INTERVAL_MS = int(getattr(config, "KEEPALIVE_INTERVAL_MS", 600000))
+WIFI_START_DELAY_S = int(getattr(config, "WIFI_START_DELAY_S", 5))
 
-log("CONFIG: KANALE")
 KANALE = [
     (config.CH1_ID, config.CH1_WEBHOOK),
     (config.CH2_ID, config.CH2_WEBHOOK),
 ]
-log("CONFIG: KANALE OK")
 
 PROFILE_MAP = {
     "d": "dry",
@@ -61,19 +52,28 @@ PROFILE_LABELS = {
     "wet": "W (WET)",
 }
 
+DRAW_COUNTER = 0
 
-# --- FUNKCJE POMOCNICZE ---
+
 def polacz_wifi():
     log("polacz_wifi: start")
     wlan = network.WLAN(network.STA_IF)
+
     if wlan.isconnected():
-        log("Wi-Fi already connected")
+        try:
+            log("Wi-Fi already connected: {}".format(wlan.ifconfig()))
+        except Exception as exc:
+            log("Wi-Fi already connected, ifconfig error: {}".format(exc))
         return True
 
     wlan.active(True)
-    log("polacz_wifi: wlan active")
+
+    try:
+        wlan.config(txpower=4)
+    except Exception as exc:
+        log("polacz_wifi: txpower config error = {}".format(exc))
+
     wlan.connect(WIFI_SSID, WIFI_PASS)
-    log("polacz_wifi: connect called")
 
     timeout = 0
     while not wlan.isconnected():
@@ -83,13 +83,16 @@ def polacz_wifi():
             log("Wi-Fi connect timeout")
             return False
 
-    log("Wi-Fi connected")
+    try:
+        log("Wi-Fi connected: {}".format(wlan.ifconfig()))
+    except Exception as exc:
+        log("Wi-Fi connected, ifconfig error: {}".format(exc))
     return True
 
 
 def wyslij_pomoc(webhook_url):
     pelny_tekst = (
-        "### WEATHER GENERATOR for GT7  - HELP\n"
+        "### WEATHER GENERATOR for GT7 - HELP\n"
         "Wpisz: **!pogoda [preset][sloty]**\n\n"
         "**Dostepne presety:**\n"
         "**d** - DRY\n"
@@ -106,9 +109,8 @@ def wyslij_pomoc(webhook_url):
     try:
         response = urequests.post(webhook_url, json=payload, headers=headers)
         response.close()
-        print("-> Instrukcja pomocy wyslana na Discorda!")
     except Exception as exc:
-        print("Blad wysylania pomocy:", exc)
+        log("Blad wysylania pomocy: {}".format(exc))
 
 
 def parse_command_text(text):
@@ -151,19 +153,15 @@ def parse_command_text(text):
 
 def build_service_url(profile_code, slot_count, seed):
     profile = PROFILE_MAP.get(profile_code, "mixed")
-    return (
-        "{}/api/draw/image?slot_count={}&profile={}&unique=false&animate=false&seed={}".format(
-            WEB_SERVICE_URL, slot_count, profile, seed
-        )
+    return "{}/api/draw/image?slot_count={}&profile={}&unique=false&animate=false&seed={}".format(
+        WEB_SERVICE_URL, slot_count, profile, seed
     )
 
 
 def wyslij_wynik_jako_obraz(webhook_url, profil_code, slot_count, image_url):
     profil = PROFILE_MAP.get(profil_code, "mixed")
     tytul = "WEATHER GENERATOR for GT7"
-    opis = "Preset {} | Slots: {}".format(
-        PROFILE_LABELS.get(profil, profil), slot_count
-    )
+    opis = "Preset {} | Slots: {}".format(PROFILE_LABELS.get(profil, profil), slot_count)
 
     payload = {
         "content": "",
@@ -180,9 +178,8 @@ def wyslij_wynik_jako_obraz(webhook_url, profil_code, slot_count, image_url):
     try:
         response = urequests.post(webhook_url, json=payload, headers=headers)
         response.close()
-        print("-> Obrazek wyslany pomyslnie!")
     except Exception as exc:
-        print("Blad wysylania obrazu przez Webhook:", exc)
+        log("Blad wysylania obrazu przez Webhook: {}".format(exc))
 
 
 def przetworz_komende(tresc, webhook_url):
@@ -196,21 +193,21 @@ def przetworz_komende(tresc, webhook_url):
     DRAW_COUNTER += 1
     seed = "{}-{}-{}".format(time.ticks_ms(), DRAW_COUNTER, slot_count)
     image_url = build_service_url(profil_code, slot_count, seed)
-    print("-> Komenda wykryta:", tresc)
-    print("-> Pobieranie obrazu:", image_url)
     wyslij_wynik_jako_obraz(webhook_url, profil_code, slot_count, image_url)
 
 
 def wyslij_blad_formatu(webhook_url):
     payload = {
-        "content": ("Nie rozpoznalem komendy. Uzyj np. `!pogoda w5` albo `!pogoda m6`.")
+        "content": (
+            "Nie rozpoznalem komendy. Uzyj np. `!pogoda w5` albo `!pogoda m6`."
+        )
     }
     headers = {"Content-Type": "application/json; charset=utf-8"}
     try:
         response = urequests.post(webhook_url, json=payload, headers=headers)
         response.close()
     except Exception as exc:
-        print("Blad wysylania komunikatu o formacie:", exc)
+        log("Blad wysylania komunikatu o formacie: {}".format(exc))
 
 
 def ping_keepalive():
@@ -229,17 +226,14 @@ def ping_keepalive():
             res.close()
 
 
-# ==========================================
-# --- BLOK STARTOWY I PĘTLA GŁÓWNA ---
-# ==========================================
+log("MAIN BLOCK: delaying Wi-Fi start by {}s".format(WIFI_START_DELAY_S))
+time.sleep(WIFI_START_DELAY_S)
 
-# 1. Bezpiecznik zasilania (czekamy 2 sekundy po resecie przed włączeniem Wi-Fi)
-log("Inicjalizacja systemu, czekam na stabilizacje zasilania...")
-log("MAIN BLOCK: before sleep")
-time.sleep(2)
-log("MAIN BLOCK: after sleep")
+try:
+    gc.collect()
+except Exception:
+    pass
 
-log("MAIN BLOCK: before wifi check")
 if polacz_wifi():
     try:
         machine.Pin(38, machine.Pin.OUT).value(1)
@@ -248,23 +242,17 @@ if polacz_wifi():
 
     log("GT7 bot wystartowal i czuwa 24/7...")
 
-    # 2. Inicjalizacja Watchdoga DOPIERO PO połączeniu z Wi-Fi.
-    # Zwiększony limit do 60 sekund na wypadek wolnego działania API Discorda.
-    log("main: WDT setup")
     wdt = machine.WDT(timeout=60000)
 
     headers_pobierania = {"Authorization": "Bot {}".format(DISCORD_TOKEN)}
     wykonane_komendy_ids = []
     czas_startu = time.ticks_ms()
     czas_ostatniego_keepalive = czas_startu
-    log("main: entering loop")
 
     while True:
         try:
-            wdt.feed()  # Reset licznika Watchdoga na początku pętli
-            log("main: loop tick")
+            wdt.feed()
 
-            # Dobowy restart systemu dla zachowania stabilności pamięci RAM
             if time.ticks_diff(time.ticks_ms(), czas_startu) > 86400000:
                 print("Dobowy restart systemu dla zachowania stabilnosci RAM...")
                 time.sleep(1)
@@ -272,44 +260,27 @@ if polacz_wifi():
 
             gc.collect()
 
-            # Obsługa Keepalive
-            if (
-                KEEPALIVE_URL
-                and time.ticks_diff(time.ticks_ms(), czas_ostatniego_keepalive)
-                >= KEEPALIVE_INTERVAL_MS
-            ):
+            if KEEPALIVE_URL and time.ticks_diff(time.ticks_ms(), czas_ostatniego_keepalive) >= KEEPALIVE_INTERVAL_MS:
                 ping_keepalive()
-                wdt.feed()  # Karmimy psa od razu po zapytaniu sieciowym
                 czas_ostatniego_keepalive = time.ticks_ms()
 
-            # Sprawdzenie i ewentualne ponowne łączenie z Wi-Fi
             if not network.WLAN(network.STA_IF).isconnected():
-                print("Utracono Wi-Fi! Proba ponownego polaczenia...")
+                log("Utracono Wi-Fi! Proba ponownego polaczenia...")
                 if not polacz_wifi():
-                    print("Nie udalo sie polaczyc z Wi-Fi. Ponawiam...")
+                    log("Nie udalo sie polaczyc z Wi-Fi. Ponawiam...")
                     time.sleep(3)
                     continue
 
-            # Odpytywanie kanałów Discorda
             for discord_channel_id, discord_webhook_url in KANALE:
-                wdt.feed()  # Karmimy psa przed wejściem w operację sieciową UART/HTTP
+                wdt.feed()
 
-                url_pobierania = (
-                    "https://discord.com/api/v10/channels/{}/messages?limit=5".format(
-                        discord_channel_id
-                    )
+                url_pobierania = "https://discord.com/api/v10/channels/{}/messages?limit=5".format(
+                    discord_channel_id
                 )
 
                 res = None
                 try:
-                    res = urequests.get(
-                        url_pobierania, headers=headers_pobierania, timeout=10
-                    )
-                    print(
-                        "Kanal: {} | Status: {}".format(
-                            discord_channel_id, res.status_code
-                        )
-                    )
+                    res = urequests.get(url_pobierania, headers=headers_pobierania, timeout=10)
 
                     if res.status_code == 200:
                         wiadomosci = res.json()
@@ -325,11 +296,6 @@ if polacz_wifi():
 
                             if tresc_lc in ("!pogoda ?", "!pogoda help"):
                                 wykonane_komendy_ids.append(msg_id)
-                                print(
-                                    "Wykryto prośbę o pomoc na kanale {}".format(
-                                        discord_channel_id
-                                    )
-                                )
                                 wyslij_pomoc(discord_webhook_url)
                                 wdt.feed()
 
@@ -339,24 +305,19 @@ if polacz_wifi():
                                 wdt.feed()
 
                 except Exception as inner_exc:
-                    print(
-                        "Blad podczas obslugi kanalu {}: {}".format(
-                            discord_channel_id, inner_exc
-                        )
-                    )
+                    log("Blad podczas obslugi kanalu {}: {}".format(discord_channel_id, inner_exc))
                 finally:
                     if res is not None:
                         res.close()
 
                 time.sleep(1)
 
-            # Czyszczenie historii ID wykonanych komend
             while len(wykonane_komendy_ids) > 50:
                 wykonane_komendy_ids.pop(0)
 
         except Exception as exc:
-            print("Glowny blad petli, ponawiam...", exc)
+            log("Glowny blad petli, ponawiam... {}".format(exc))
 
         time.sleep(3)
 else:
-    print("MAIN STOP: Wi-Fi connection failed, script ended.")
+    log("MAIN STOP: Wi-Fi connection failed, script ended.")

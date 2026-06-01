@@ -36,7 +36,9 @@ def generate_weather_slots(
     unique: bool,
     profile: str,
     fixed_slots: dict[int, str] | None = None,
+    seed: str | int | None = None,
 ) -> list[str]:
+    rng = random.Random(seed) if seed is not None else random
     if slot_count < 1:
         raise ValueError("slot_count must be >= 1")
     if profile not in PROFILES:
@@ -63,14 +65,14 @@ def generate_weather_slots(
 
     if unique and profile == "equal":
         pool = [code for code in ALL_WEATHER if code not in seen]
-        sampled = random.sample(pool, k=len(missing_positions))
+        sampled = rng.sample(pool, k=len(missing_positions))
         for idx, code in zip(missing_positions, sampled):
             slots[idx] = code
         return [code for code in slots if code is not None]
 
     for idx in missing_positions:
         while True:
-            code = weighted_code(profile)
+            code = weighted_code(profile) if seed is None else _weighted_code(profile, rng)
             if unique and code in seen:
                 continue
             slots[idx] = code
@@ -79,3 +81,18 @@ def generate_weather_slots(
             break
 
     return [code for code in slots if code is not None]
+
+
+def _weighted_code(profile: str, rng: random.Random) -> str:
+    weights = PROFILES[profile]
+    bucket = rng.choices(
+        population=["sunny", "cloudy", "rain"],
+        weights=[weights["sunny"], weights["cloudy"], weights["rain"]],
+        k=1,
+    )[0]
+
+    if bucket == "sunny":
+        return rng.choice(SUNNY)
+    if bucket == "cloudy":
+        return rng.choice(CLOUDY)
+    return rng.choice(RAIN)
