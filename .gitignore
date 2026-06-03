@@ -2,3 +2,13 @@ __pycache__/
 *.pyc
 .venv/
 *.log
+# Secrets / local config
+config.py
+deploy_bundle/esp/config.py
+
+# Local bundles and caches
+release_packs/
+deploy_bundle/render/__pycache__/
+cache/
+deploy_bundle/render/cache/
+.micropico

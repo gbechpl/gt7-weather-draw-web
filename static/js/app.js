@@ -6,9 +6,9 @@ const ICON_CODES = [
 
 const ICON_H = 129;
 const SPIN_SPEED = 18;
-const INITIAL_STOP_DELAY_MS = 1800;
-const STOP_INTERVAL_MS = 600;
-const STOP_EASE_DURATION_MS = 650;
+const INITIAL_STOP_DELAY_MS = 900;
+const STOP_INTERVAL_MS = 220;
+const STOP_EASE_DURATION_MS = 260;
 
 const reelsEl = document.getElementById("reels");
 const drawBtnEl = document.getElementById("drawBtn");

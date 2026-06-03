@@ -1,7 +1,12 @@
-try:
-    import webrepl
+def log(msg):
+    print(msg)
+    try:
+        with open("boot.log", "a") as f:
+            f.write(msg + "\n")
+    except Exception:
+        pass
 
-    webrepl.start()
-    print("WebREPL started")
-except Exception as exc:
-    print("WebREPL failed:", exc)
+
+log("START boot.py")
+
+# Keep boot minimal; main.py should still autostart.

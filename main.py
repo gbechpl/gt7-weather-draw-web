@@ -53,6 +53,8 @@ PROFILE_LABELS = {
 }
 
 DRAW_COUNTER = 0
+CHANNEL_POLL_DELAY_MS = 250
+LOOP_IDLE_DELAY_MS = 1000
 
 
 def polacz_wifi():
@@ -177,7 +179,9 @@ def wyslij_wynik_jako_obraz(webhook_url, profil_code, slot_count, image_url):
     headers = {"Content-Type": "application/json; charset=utf-8"}
     try:
         response = urequests.post(webhook_url, json=payload, headers=headers)
+        log("-> Webhook status: {}".format(response.status_code))
         response.close()
+        log("-> Obrazek wyslany pomyslnie!")
     except Exception as exc:
         log("Blad wysylania obrazu przez Webhook: {}".format(exc))
 
@@ -310,7 +314,7 @@ if polacz_wifi():
                     if res is not None:
                         res.close()
 
-                time.sleep(1)
+                time.sleep_ms(CHANNEL_POLL_DELAY_MS)
 
             while len(wykonane_komendy_ids) > 50:
                 wykonane_komendy_ids.pop(0)
@@ -318,6 +322,6 @@ if polacz_wifi():
         except Exception as exc:
             log("Glowny blad petli, ponawiam... {}".format(exc))
 
-        time.sleep(3)
+        time.sleep_ms(LOOP_IDLE_DELAY_MS)
 else:
     log("MAIN STOP: Wi-Fi connection failed, script ended.")

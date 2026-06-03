@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import struct
+import math
 import zlib
 from functools import lru_cache
 from pathlib import Path
@@ -288,9 +289,69 @@ def _fill_rect(
     rect_height: int,
     color: tuple[int, int, int, int],
 ) -> None:
+    if rect_width <= 0 or rect_height <= 0:
+        return
+
+    row_bytes = bytes(color) * rect_width
+    row_stride = width * 4
+    copy_length = rect_width * 4
     for row in range(y, y + rect_height):
-        for column in range(x, x + rect_width):
-            _set_pixel(pixels, width, height, column, row, color)
+        if row < 0 or row >= height:
+            continue
+        start = (row * width + x) * 4
+        end = start + copy_length
+        if start < 0 or end > len(pixels):
+            continue
+        pixels[start:end] = row_bytes
+
+
+@lru_cache(maxsize=128)
+def _rounded_rect_spans(rect_width: int, rect_height: int, radius: int) -> tuple[tuple[int, int], ...]:
+    radius = max(0, min(radius, rect_width // 2, rect_height // 2))
+    radius_sq = radius * radius
+    spans: list[tuple[int, int]] = []
+
+    for row in range(rect_height):
+        if radius == 0 or (radius <= row < rect_height - radius):
+            spans.append((0, rect_width))
+            continue
+
+        if row < radius:
+            dy = (radius - 1) - row
+        else:
+            dy = row - (rect_height - radius)
+
+        start = None
+        for column in range(rect_width):
+            dx = 0
+            if column < radius:
+                dx = (radius - 1) - column
+            elif column >= rect_width - radius:
+                dx = column - (rect_width - radius)
+
+            if dx * dx + dy * dy <= radius_sq:
+                start = column
+                break
+
+        if start is None:
+            spans.append((0, 0))
+            continue
+
+        end = rect_width
+        for column in range(rect_width - 1, start - 1, -1):
+            dx = 0
+            if column < radius:
+                dx = (radius - 1) - column
+            elif column >= rect_width - radius:
+                dx = column - (rect_width - radius)
+
+            if dx * dx + dy * dy <= radius_sq:
+                end = column + 1
+                break
+
+        spans.append((start, end))
+
+    return tuple(spans)
 
 
 def _stroke_rect(
@@ -303,12 +364,26 @@ def _stroke_rect(
     rect_height: int,
     color: tuple[int, int, int, int],
 ) -> None:
-    for column in range(x, x + rect_width):
-        _set_pixel(pixels, width, height, column, y, color)
-        _set_pixel(pixels, width, height, column, y + rect_height - 1, color)
-    for row in range(y, y + rect_height):
-        _set_pixel(pixels, width, height, x, row, color)
-        _set_pixel(pixels, width, height, x + rect_width - 1, row, color)
+    if rect_width <= 0 or rect_height <= 0:
+        return
+
+    top = (y * width + x) * 4
+    bottom = ((y + rect_height - 1) * width + x) * 4
+    row_bytes = bytes(color) * rect_width
+    pixels[top : top + rect_width * 4] = row_bytes
+    if rect_height > 1:
+        pixels[bottom : bottom + rect_width * 4] = row_bytes
+
+    row_color = bytes(color) * 1
+    for row in range(y + 1, y + rect_height - 1):
+        if row < 0 or row >= height:
+            continue
+        left = (row * width + x) * 4
+        right = (row * width + x + rect_width - 1) * 4
+        if 0 <= left < len(pixels):
+            pixels[left : left + 4] = row_color
+        if 0 <= right < len(pixels):
+            pixels[right : right + 4] = row_color
 
 
 def _fill_rounded_rect(
@@ -322,22 +397,19 @@ def _fill_rounded_rect(
     radius: int,
     color: tuple[int, int, int, int],
 ) -> None:
-    radius = max(0, min(radius, rect_width // 2, rect_height // 2))
-    radius_sq = radius * radius
-    for row in range(y, y + rect_height):
-        for column in range(x, x + rect_width):
-            dx = 0
-            dy = 0
-            if column < x + radius:
-                dx = (x + radius - 1) - column
-            elif column >= x + rect_width - radius:
-                dx = column - (x + rect_width - radius)
-            if row < y + radius:
-                dy = (y + radius - 1) - row
-            elif row >= y + rect_height - radius:
-                dy = row - (y + rect_height - radius)
-            if dx * dx + dy * dy <= radius_sq:
-                _set_pixel(pixels, width, height, column, row, color)
+    spans = _rounded_rect_spans(rect_width, rect_height, radius)
+    color_bytes = bytes(color)
+    for row_offset, (start_x, end_x) in enumerate(spans):
+        if start_x >= end_x:
+            continue
+        row = y + row_offset
+        if row < 0 or row >= height:
+            continue
+        start = ((row * width) + (x + start_x)) * 4
+        length = (end_x - start_x) * 4
+        if start < 0 or start + length > len(pixels):
+            continue
+        pixels[start : start + length] = color_bytes * (end_x - start_x)
 
 
 def _stroke_rounded_rect(
@@ -351,38 +423,26 @@ def _stroke_rounded_rect(
     radius: int,
     color: tuple[int, int, int, int],
 ) -> None:
-    radius = max(0, min(radius, rect_width // 2, rect_height // 2))
-    radius_sq = radius * radius
-    inner_radius = max(radius - 1, 0)
-    inner_radius_sq = inner_radius * inner_radius
-    for row in range(y, y + rect_height):
-        for column in range(x, x + rect_width):
-            outer_dx = 0
-            outer_dy = 0
-            if column < x + radius:
-                outer_dx = (x + radius - 1) - column
-            elif column >= x + rect_width - radius:
-                outer_dx = column - (x + rect_width - radius)
-            if row < y + radius:
-                outer_dy = (y + radius - 1) - row
-            elif row >= y + rect_height - radius:
-                outer_dy = row - (y + rect_height - radius)
+    outer_spans = _rounded_rect_spans(rect_width, rect_height, radius)
+    inner_spans = _rounded_rect_spans(rect_width, rect_height, max(radius - 1, 0))
+    color_bytes = bytes(color)
 
-            inner_dx = 0
-            inner_dy = 0
-            if column < x + inner_radius:
-                inner_dx = (x + inner_radius - 1) - column
-            elif column >= x + rect_width - inner_radius:
-                inner_dx = column - (x + rect_width - inner_radius)
-            if row < y + inner_radius:
-                inner_dy = (y + inner_radius - 1) - row
-            elif row >= y + rect_height - inner_radius:
-                inner_dy = row - (y + rect_height - inner_radius)
+    for row_offset, ((outer_start, outer_end), (inner_start, inner_end)) in enumerate(zip(outer_spans, inner_spans)):
+        row = y + row_offset
+        if row < 0 or row >= height:
+            continue
 
-            inside_outer = outer_dx * outer_dx + outer_dy * outer_dy <= radius_sq
-            inside_inner = inner_dx * inner_dx + inner_dy * inner_dy <= inner_radius_sq
-            if inside_outer and not inside_inner:
-                _set_pixel(pixels, width, height, column, row, color)
+        if outer_start < inner_start:
+            start = ((row * width) + (x + outer_start)) * 4
+            length = (inner_start - outer_start) * 4
+            if start >= 0 and start + length <= len(pixels):
+                pixels[start : start + length] = color_bytes * (inner_start - outer_start)
+
+        if inner_end < outer_end:
+            start = ((row * width) + (x + inner_end)) * 4
+            length = (outer_end - inner_end) * 4
+            if start >= 0 and start + length <= len(pixels):
+                pixels[start : start + length] = color_bytes * (outer_end - inner_end)
 
 
 def _draw_text(
@@ -441,16 +501,17 @@ def _blit_rgba(
     dest_x: int,
     dest_y: int,
 ) -> None:
+    row_length = source_width * 4
     for row in range(source_height):
-        for column in range(source_width):
-            source_index = (row * source_width + column) * 4
-            color = (
-                source[source_index],
-                source[source_index + 1],
-                source[source_index + 2],
-                source[source_index + 3],
-            )
-            _blend_pixel(pixels, width, height, dest_x + column, dest_y + row, color)
+        target_y = dest_y + row
+        if target_y < 0 or target_y >= height:
+            continue
+        source_index = row * row_length
+        target_index = (target_y * width + dest_x) * 4
+        end_index = target_index + row_length
+        if target_index < 0 or end_index > len(pixels):
+            continue
+        pixels[target_index:end_index] = source[source_index : source_index + row_length]
 
 
 @lru_cache(maxsize=1)
@@ -482,17 +543,8 @@ def _profile_accent(profile: str) -> tuple[int, int, int, int]:
     return (109, 226, 165, 255)
 
 
-def render_weather_draw_png(
-    codes: list[str],
-    profile: str,
-    unique: bool,
-    sprite_path: Path,
-) -> bytes:
-    sprite_width, sprite_height, sprite_pixels = _load_sprite_sheet(str(sprite_path))
-    if sprite_width != SPRITE_WIDTH or sprite_height != SPRITE_HEIGHT * SPRITE_COUNT:
-        raise ValueError("unexpected_sprite_dimensions")
-
-    slot_count = len(codes)
+@lru_cache(maxsize=8)
+def _base_canvas_for_slot_count(slot_count: int) -> bytes:
     card_width = 118
     card_height = 160
     label_height = 22
@@ -509,9 +561,7 @@ def render_weather_draw_png(
     footer_y = canvas_height - 11
 
     pixels = _new_canvas(canvas_width, canvas_height, (8, 16, 26, 255))
-    accent = _profile_accent(profile)
 
-    # Outer background glow and the main panel that matches the live page.
     _fill_rect(pixels, canvas_width, canvas_height, 0, 0, canvas_width, canvas_height, (8, 16, 26, 255))
     _fill_rounded_rect(
         pixels,
@@ -537,7 +587,7 @@ def render_weather_draw_png(
     )
 
     card_top = outer_padding_y + panel_padding_y - 6
-    for index, code in enumerate(codes):
+    for index in range(slot_count):
         card_left = outer_padding_x + panel_padding_x + index * (card_width + card_gap)
         shadow_color = (0, 0, 0, 76)
         _fill_rounded_rect(
@@ -574,14 +624,6 @@ def render_weather_draw_png(
             (84, 100, 120, 255),
         )
 
-        tile_index = SPRITE_INDEX.get(code)
-        if tile_index is None:
-            raise ValueError(f"unknown_weather_code:{code}")
-        tile = _extract_sprite_tile(sprite_pixels, sprite_width, tile_index)
-        tile_x = card_left + 2
-        tile_y = card_top + 2
-        _blit_rgba(pixels, canvas_width, canvas_height, tile, SPRITE_WIDTH, SPRITE_HEIGHT, tile_x, tile_y)
-
         _draw_text(
             pixels,
             canvas_width,
@@ -603,5 +645,42 @@ def render_weather_draw_png(
         footer_text,
         (150, 160, 170, 120),
     )
+
+    return bytes(pixels)
+
+
+def render_weather_draw_png(
+    codes: list[str],
+    profile: str,
+    unique: bool,
+    sprite_path: Path,
+) -> bytes:
+    sprite_width, sprite_height, sprite_pixels = _load_sprite_sheet(str(sprite_path))
+    if sprite_width != SPRITE_WIDTH or sprite_height != SPRITE_HEIGHT * SPRITE_COUNT:
+        raise ValueError("unexpected_sprite_dimensions")
+
+    slot_count = len(codes)
+    card_width = 118
+    card_height = 160
+    card_gap = 18
+    outer_padding_x = 16
+    outer_padding_y = 16
+    panel_padding_x = 24
+    panel_padding_y = 18
+    canvas_width = outer_padding_x * 2 + panel_padding_x * 2 + slot_count * card_width + max(slot_count - 1, 0) * card_gap
+    canvas_height = 218
+    card_top = outer_padding_y + panel_padding_y - 6
+    card_left_start = outer_padding_x + panel_padding_x
+
+    pixels = bytearray(_base_canvas_for_slot_count(slot_count))
+    for index, code in enumerate(codes):
+        tile_index = SPRITE_INDEX.get(code)
+        if tile_index is None:
+            raise ValueError(f"unknown_weather_code:{code}")
+        tile = _extract_sprite_tile(sprite_pixels, sprite_width, tile_index)
+        card_left = card_left_start + index * (card_width + card_gap)
+        tile_x = card_left + 2
+        tile_y = card_top + 2
+        _blit_rgba(pixels, canvas_width, canvas_height, tile, SPRITE_WIDTH, SPRITE_HEIGHT, tile_x, tile_y)
 
     return _encode_png_rgba(canvas_width, canvas_height, bytes(pixels))
