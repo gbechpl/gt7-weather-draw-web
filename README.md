@@ -39,6 +39,36 @@ Plik `boot.py` uruchamia WebREPL automatycznie po starcie płytki.
 
 Jeśli WebREPL nie ma jeszcze ustawionego hasła, uruchom na ESP32 jednorazowo `webrepl_setup` i ustaw hasło przez konsolę MicroPythona.
 
+## Bot Discord na ESP32
+
+W katalogu `deploy_bundle/esp` znajduje się gotowy bundle do wgrania na ESP32-S3:
+
+- `main.py` - bot Discord w MicroPythonie
+- `config.py` - konfiguracja Wi-Fi, tokenu bota, kanałów i webhooków
+- `boot.py` - automatyczny start WebREPL
+
+Bot działa tak:
+
+- odpytuje cztery kanały Discorda po kolei przez `GET /channels/{id}/messages`
+- rozpoznaje komendy `!pogoda d3` do `!pogoda w9`
+- wysyła wynik jako embed z obrazem przez webhook kanału
+- opcjonalnie pinguję backend `/keepalive`, żeby nie zasypiał
+
+Ważne wymagania po stronie Discorda:
+
+- scope zaproszenia: `bot` i `applications.commands`
+- uprawnienia bota: `View Channels` i `Read Message History`
+- dla wysyłki wiadomości testowych przydaje się też `Send Messages`
+
+Przydatne statusy z logów:
+
+- `200` - bot ma dostęp do kanału
+- `403 Missing Access` - bot nie widzi kanału albo nie ma roli
+- `404 Unknown Webhook` - webhook jest nieaktualny albo zły
+- `429` - limit API, bot czeka zgodnie z `retry_after`
+
+Jeśli zmieniasz webhook albo token, wgraj ponownie cały bundle na ESP32.
+
 ## Lokalny bot do testów
 
 Plik `bot_vs.py` uruchamia bota Discord lokalnie z VS Code i pobiera gotowy obraz z Rendera.

@@ -1,5 +1,4 @@
 def log(msg):
-    print(msg)
     try:
         with open("main.log", "a") as f:
             f.write(msg + "\n")
@@ -40,12 +39,28 @@ KEEPALIVE_URL = getattr(
 log("CONFIG: KEEPALIVE_INTERVAL_MS")
 KEEPALIVE_INTERVAL_MS = int(getattr(config, "KEEPALIVE_INTERVAL_MS", 600000))
 
+
+def zamaskuj_webhook(webhook_url):
+    if not webhook_url:
+        return "<empty>"
+
+    if len(webhook_url) <= 18:
+        return webhook_url
+
+    return "{}...{}".format(webhook_url[:12], webhook_url[-8:])
+
 log("CONFIG: KANALE")
 KANALE = [
     (config.CH1_ID, config.CH1_WEBHOOK),
     (config.CH2_ID, config.CH2_WEBHOOK),
+    (config.CH3_ID, config.CH3_WEBHOOK),
+    (config.CH4_ID, config.CH4_WEBHOOK),
 ]
 log("CONFIG: KANALE OK")
+#    print("CONFIG: CH1_WEBHOOK:", zamaskuj_webhook(config.CH1_WEBHOOK))
+#    print("CONFIG: CH2_WEBHOOK:", zamaskuj_webhook(config.CH2_WEBHOOK))
+#    print("CONFIG: CH3_WEBHOOK:", zamaskuj_webhook(config.CH3_WEBHOOK))
+#    print("CONFIG: CH4_WEBHOOK:", zamaskuj_webhook(config.CH4_WEBHOOK))
 
 PROFILE_MAP = {
     "d": "dry",
@@ -108,11 +123,17 @@ def wyslij_pomoc(webhook_url):
     payload = {"content": pelny_tekst}
     headers = {"Content-Type": "application/json; charset=utf-8"}
     try:
+#        print("-> Wysylam webhook z pomoca:", zamaskuj_webhook(webhook_url))
         response = urequests.post(webhook_url, json=payload, headers=headers)
+        if obsluz_rate_limit(response, "Webhook"):
+            response.close()
+            return
+        wypisz_wynik_http(
+            "Webhook", response, "-> Instrukcja pomocy wyslana na Discorda!"
+        )
         response.close()
-        print("-> Instrukcja pomocy wyslana na Discorda!")
     except Exception as exc:
-        print("Blad wysylania pomocy:", exc)
+#        print("Blad wysylania pomocy:", exc)
 
 
 def parse_command_text(text):
@@ -155,10 +176,8 @@ def parse_command_text(text):
 
 def build_service_url(profile_code, slot_count, seed):
     profile = PROFILE_MAP.get(profile_code, "mixed")
-    return (
-        "{}/api/draw/image?slot_count={}&profile={}&unique=false&animate=false&seed={}".format(
-            WEB_SERVICE_URL, slot_count, profile, seed
-        )
+    return "{}/api/draw/image?slot_count={}&profile={}&unique=false&animate=false&seed={}".format(
+        WEB_SERVICE_URL, slot_count, profile, seed
     )
 
 
@@ -183,11 +202,13 @@ def wyslij_wynik_jako_obraz(webhook_url, profil_code, slot_count, image_url):
     headers = {"Content-Type": "application/json; charset=utf-8"}
     try:
         response = urequests.post(webhook_url, json=payload, headers=headers)
-        print("-> Webhook status:", response.status_code)
+        if obsluz_rate_limit(response, "Webhook"):
+            response.close()
+            return
+        sukces = wypisz_wynik_http("Webhook", response)
         response.close()
-        print("-> Obrazek wyslany pomyslnie!")
     except Exception as exc:
-        print("Blad wysylania obrazu przez Webhook:", exc)
+#        print("Blad wysylania obrazu przez Webhook:", exc)
 
 
 def przetworz_komende(tresc, webhook_url):
@@ -201,8 +222,6 @@ def przetworz_komende(tresc, webhook_url):
     DRAW_COUNTER += 1
     seed = "{}-{}-{}".format(time.ticks_ms(), DRAW_COUNTER, slot_count)
     image_url = build_service_url(profil_code, slot_count, seed)
-    print("-> Komenda wykryta:", tresc)
-    print("-> Pobieranie obrazu:", image_url)
     wyslij_wynik_jako_obraz(webhook_url, profil_code, slot_count, image_url)
 
 
@@ -213,9 +232,13 @@ def wyslij_blad_formatu(webhook_url):
     headers = {"Content-Type": "application/json; charset=utf-8"}
     try:
         response = urequests.post(webhook_url, json=payload, headers=headers)
+        if obsluz_rate_limit(response, "Webhook"):
+            response.close()
+            return
+        wypisz_wynik_http("Webhook", response)
         response.close()
     except Exception as exc:
-        print("Blad wysylania komunikatu o formacie:", exc)
+#        print("Blad wysylania komunikatu o formacie:", exc)
 
 
 def ping_keepalive():
@@ -224,14 +247,64 @@ def ping_keepalive():
 
     res = None
     try:
-        print("Ping keepalive:", KEEPALIVE_URL)
         res = urequests.get(KEEPALIVE_URL, timeout=10)
-        print("Keepalive status:", res.status_code)
     except Exception as exc:
-        print("Blad keepalive:", exc)
+#        print("Blad keepalive:", exc)
     finally:
         if res is not None:
             res.close()
+
+
+def odczytaj_tresc_odpowiedzi(res):
+    try:
+        body = getattr(res, "content", None)
+        if body:
+            if isinstance(body, bytes):
+                try:
+                    return body.decode("utf-8")
+                except Exception:
+                    return str(body)
+            return str(body)
+    except Exception:
+        pass
+
+    try:
+        body = getattr(res, "text", None)
+        if callable(body):
+            return body()
+        if body:
+            return str(body)
+    except Exception:
+        pass
+
+    return ""
+
+
+def wypisz_wynik_http(label, res, sukces_message=None):
+    if 200 <= res.status_code < 300:
+        return True
+
+    tresc_odpowiedzi = odczytaj_tresc_odpowiedzi(res)
+    return False
+
+
+def obsluz_rate_limit(res, label):
+    if getattr(res, "status_code", None) != 429:
+        return False
+
+    retry_after_ms = 1000
+    try:
+        dane = res.json()
+        retry_after = float(dane.get("retry_after", 1.0))
+        retry_after_ms = int(retry_after * 1000)
+    except Exception:
+        pass
+
+    if retry_after_ms < 1000:
+        retry_after_ms = 1000
+
+    time.sleep_ms(retry_after_ms)
+    return True
 
 
 # ==========================================
@@ -239,39 +312,42 @@ def ping_keepalive():
 # ==========================================
 
 # 1. Bezpiecznik zasilania (czekamy 2 sekundy po resecie przed włączeniem Wi-Fi)
-log("Inicjalizacja systemu, czekam na stabilizacje zasilania...")
-log("MAIN BLOCK: before sleep")
-time.sleep(2)
-log("MAIN BLOCK: after sleep")
+#log("Inicjalizacja systemu, czekam na stabilizacje zasilania i monitor serial...")
+#log("MAIN BLOCK: before sleep")
+# Krótka pauza na pozwolenie terminalowi/monitorowi szeregowemu
+# aby zdążył się połączyć po resecie (ułatwia debug/repl monitoring)
+time.sleep(5)
+#log("MAIN BLOCK: after sleep")
 
-log("MAIN BLOCK: before wifi check")
+#log("MAIN BLOCK: before wifi check")
 if polacz_wifi():
     try:
         machine.Pin(38, machine.Pin.OUT).value(1)
     except Exception:
         pass
 
-    log("GT7 bot wystartowal i czuwa 24/7...")
+#    log("GT7 bot wystartowal i czuwa 24/7...")
 
     # 2. Inicjalizacja Watchdoga DOPIERO PO połączeniu z Wi-Fi.
     # Zwiększony limit do 60 sekund na wypadek wolnego działania API Discorda.
-    log("main: WDT setup")
+#    log("main: WDT setup")
     wdt = machine.WDT(timeout=60000)
 
     headers_pobierania = {"Authorization": "Bot {}".format(DISCORD_TOKEN)}
     wykonane_komendy_ids = []
     czas_startu = time.ticks_ms()
     czas_ostatniego_keepalive = czas_startu
-    log("main: entering loop")
+#    log("main: entering loop")
 
     while True:
         try:
+            petla_start_ms = time.ticks_ms()
             wdt.feed()  # Reset licznika Watchdoga na początku pętli
-            log("main: loop tick")
+#            log("main: loop tick")
 
             # Dobowy restart systemu dla zachowania stabilności pamięci RAM
             if time.ticks_diff(time.ticks_ms(), czas_startu) > 86400000:
-                print("Dobowy restart systemu dla zachowania stabilnosci RAM...")
+#                print("Dobowy restart systemu dla zachowania stabilnosci RAM...")
                 time.sleep(1)
                 machine.reset()
 
@@ -289,14 +365,15 @@ if polacz_wifi():
 
             # Sprawdzenie i ewentualne ponowne łączenie z Wi-Fi
             if not network.WLAN(network.STA_IF).isconnected():
-                print("Utracono Wi-Fi! Proba ponownego polaczenia...")
+#                print("Utracono Wi-Fi! Proba ponownego polaczenia...")
                 if not polacz_wifi():
-                    print("Nie udalo sie polaczyc z Wi-Fi. Ponawiam...")
+#                    print("Nie udalo sie polaczyc z Wi-Fi. Ponawiam...")
                     time.sleep(3)
                     continue
 
             # Odpytywanie kanałów Discorda
             for discord_channel_id, discord_webhook_url in KANALE:
+                kanal_start_ms = time.ticks_ms()
                 wdt.feed()  # Karmimy psa przed wejściem w operację sieciową UART/HTTP
 
                 url_pobierania = (
@@ -310,11 +387,23 @@ if polacz_wifi():
                     res = urequests.get(
                         url_pobierania, headers=headers_pobierania, timeout=10
                     )
-                    print(
-                        "Kanal: {} | Status: {}".format(
-                            discord_channel_id, res.status_code
-                        )
-                    )
+#                    print(
+#                        "Kanal: {} | Status: {}".format(
+#                            discord_channel_id, res.status_code
+#                        )
+#                    )
+                    if res.status_code != 200:
+                        tresc_odpowiedzi = odczytaj_tresc_odpowiedzi(res)
+                        if tresc_odpowiedzi:
+#                            print(
+#                                "Kanal: {} | Body: {}".format(
+#                                    discord_channel_id, tresc_odpowiedzi
+#                                )
+#                            )
+                        if obsluz_rate_limit(
+                            res, "Kanal {}".format(discord_channel_id)
+                        ):
+                            continue
 
                     if res.status_code == 200:
                         wiadomosci = res.json()
@@ -330,11 +419,11 @@ if polacz_wifi():
 
                             if tresc_lc in ("!pogoda ?", "!pogoda help"):
                                 wykonane_komendy_ids.append(msg_id)
-                                print(
-                                    "Wykryto prośbę o pomoc na kanale {}".format(
-                                        discord_channel_id
-                                    )
-                                )
+#                                print(
+#                                    "Wykryto prośbę o pomoc na kanale {}".format(
+#                                        discord_channel_id
+#                                    )
+#                                )
                                 wyslij_pomoc(discord_webhook_url)
                                 wdt.feed()
 
@@ -344,15 +433,20 @@ if polacz_wifi():
                                 wdt.feed()
 
                 except Exception as inner_exc:
-                    print(
-                        "Blad podczas obslugi kanalu {}: {}".format(
-                            discord_channel_id, inner_exc
-                        )
-                    )
+#                    print(
+#                        "Blad podczas obslugi kanalu {}: {}".format(
+#                            discord_channel_id, inner_exc
+#                        )
+#                    )
                 finally:
                     if res is not None:
                         res.close()
 
+#                print(
+#                    "Kanal: {} | Czas obslugi: {} ms".format(
+#                        discord_channel_id, time.ticks_diff(time.ticks_ms(), kanal_start_ms)
+#                    )
+#                )
                 time.sleep_ms(CHANNEL_POLL_DELAY_MS)
 
             # Czyszczenie historii ID wykonanych komend
@@ -360,8 +454,13 @@ if polacz_wifi():
                 wykonane_komendy_ids.pop(0)
 
         except Exception as exc:
-            print("Glowny blad petli, ponawiam...", exc)
+#            print("Glowny blad petli, ponawiam...", exc)
 
+#        print(
+#            "Caly obieg petli: {} ms".format(
+#                time.ticks_diff(time.ticks_ms(), petla_start_ms)
+#            )
+#        )
         time.sleep_ms(LOOP_IDLE_DELAY_MS)
 else:
-    print("MAIN STOP: Wi-Fi connection failed, script ended.")
+#    print("MAIN STOP: Wi-Fi connection failed, script ended.")

@@ -1,4 +1,4 @@
-import random
+seriamimport random
 import discord
 from discord import app_commands
 

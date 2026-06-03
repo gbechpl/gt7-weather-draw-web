@@ -36,6 +36,8 @@ WIFI_START_DELAY_S = int(getattr(config, "WIFI_START_DELAY_S", 5))
 KANALE = [
     (config.CH1_ID, config.CH1_WEBHOOK),
     (config.CH2_ID, config.CH2_WEBHOOK),
+    (config.CH3_ID, config.CH3_WEBHOOK),
+    (config.CH4_ID, config.CH4_WEBHOOK),
 ]
 
 PROFILE_MAP = {

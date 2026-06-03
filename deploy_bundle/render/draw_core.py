@@ -9,7 +9,7 @@ RAIN = [f"R{i:02d}" for i in range(1, 9)]
 ALL_WEATHER = SUNNY + CLOUDY + RAIN
 
 PROFILES = {
-    "dry": {"sunny": 6.0, "cloudy": 2.5, "rain": 1.0},
+    "dry": {"sunny": 8.5, "cloudy": 1.5, "rain": 0.0},
     "equal": {"sunny": 1.0, "cloudy": 1.0, "rain": 1.0},
     "mixed": {"sunny": 3.0, "cloudy": 3.0, "rain": 2.0},
     "wet": {"sunny": 1.5, "cloudy": 3.0, "rain": 5.5},
