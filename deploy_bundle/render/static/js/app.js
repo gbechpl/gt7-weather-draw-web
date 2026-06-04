@@ -219,10 +219,11 @@ function codeIndex(code) {
   return index < 0 ? 0 : index;
 }
 
-function createReel(initialCode) {
+function createReel(initialCode, slotNumber) {
   const root = document.createElement("article");
   root.className = "reel";
   root.dataset.placeholder = "false";
+  root.dataset.slotNumber = String(slotNumber);
 
   const slot = document.createElement("div");
   slot.className = "reel-slot";
@@ -240,7 +241,7 @@ function createReel(initialCode) {
 
   const code = document.createElement("div");
   code.className = "reel-code";
-  code.textContent = initialCode;
+  code.textContent = `Slot ${slotNumber}`;
 
   root.appendChild(slot);
   root.appendChild(code);
@@ -251,6 +252,7 @@ function createReel(initialCode) {
     sprite,
     placeholderEl: placeholder,
     codeEl: code,
+    slotNumber,
     currentCode: initialCode,
     targetCode: initialCode,
     offset: -(codeIndex(initialCode) * ICON_H),
@@ -265,7 +267,7 @@ function updateSpritePosition(reel) {
 
 function ensureReels(count) {
   while (reels.length < count) {
-    const reel = createReel(randomCode());
+    const reel = createReel(randomCode(), reels.length + 1);
     updateSpritePosition(reel);
     reels.push(reel);
     reelsEl.appendChild(reel.root);
@@ -283,7 +285,6 @@ function setReelPlaceholder(reel, isPlaceholder) {
   reel.sprite.style.visibility = isPlaceholder ? "hidden" : "visible";
 
   if (isPlaceholder) {
-    reel.codeEl.textContent = PLACEHOLDER_CODE;
     reel.offset = 0;
     updateSpritePosition(reel);
   }
@@ -295,8 +296,21 @@ function renderIdleReels(count) {
     reel.currentCode = PLACEHOLDER_CODE;
     reel.targetCode = PLACEHOLDER_CODE;
     reel.spinning = false;
+    reel.codeEl.textContent = `Slot ${reel.slotNumber}`;
     resetSpriteTransition(reel);
     setReelPlaceholder(reel, true);
+  });
+}
+
+function clearIdleReels(count) {
+  ensureReels(count);
+  reels.forEach((reel) => {
+    setReelPlaceholder(reel, false);
+    reel.currentCode = "";
+    reel.targetCode = "";
+    reel.spinning = false;
+    reel.codeEl.textContent = `Slot ${reel.slotNumber}`;
+    resetSpriteTransition(reel);
   });
 }
 
@@ -313,7 +327,7 @@ function renderStoppedCodes(codes) {
     reel.targetCode = code;
     reel.spinning = false;
     reel.offset = -(codeIndex(code) * ICON_H);
-    reel.codeEl.textContent = code;
+    reel.codeEl.textContent = `Slot ${reel.slotNumber}`;
     resetSpriteTransition(reel);
     updateSpritePosition(reel);
   });
@@ -435,7 +449,7 @@ function startClientAnimation(finalCodes) {
     reel.spinning = true;
     reel.direction = Math.random() < 0.5 ? 1 : -1;
     reel.currentCode = randomCode();
-    reel.codeEl.textContent = "LOS";
+    reel.codeEl.textContent = `Slot ${reel.slotNumber}`;
     resetSpriteTransition(reel);
   });
 
@@ -469,13 +483,15 @@ async function runDraw() {
   statusEl.textContent = "Losowanie trwa...";
   const animationSeconds = getAnimationSeconds();
   const animationDurationMs = animationSeconds * 1000;
+  const slotCount = Number(slotCountEl.value || 9);
+  clearIdleReels(slotCount);
 
   try {
     const response = await fetch(drawUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        slot_count: Number(slotCountEl.value || 9),
+        slot_count: slotCount,
         profile: String(profileEl.value || "mixed"),
         unique: Boolean(uniqueEl.checked),
         animate: true,
@@ -510,6 +526,7 @@ async function runDraw() {
   } catch (error) {
     statusEl.textContent = "Nie udało się wykonać losowania";
     resultTextEl.textContent = String(error.message || error);
+    renderIdleReels(slotCount);
     drawBtnEl.disabled = false;
   }
 }
