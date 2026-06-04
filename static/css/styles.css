@@ -500,6 +500,10 @@ body[data-theme="mono-red"] .machine-shell {
   pointer-events: none;
 }
 
+.reel-placeholder[hidden] {
+  display: none !important;
+}
+
 .reel[data-placeholder="true"] .reel-code {
   color: var(--accent);
   letter-spacing: 0.16em;
