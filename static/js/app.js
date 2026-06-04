@@ -385,7 +385,7 @@ function stopReel(index, code) {
   reel.spinning = false;
   reel.currentCode = code;
   reel.targetCode = code;
-  reel.codeEl.textContent = code;
+  reel.codeEl.textContent = `Slot ${reel.slotNumber}`;
 
   const targetOffset = -(codeIndex(code) * ICON_H);
   const loopHeight = ICON_CODES.length * ICON_H;
@@ -484,7 +484,6 @@ async function runDraw() {
   const animationSeconds = getAnimationSeconds();
   const animationDurationMs = animationSeconds * 1000;
   const slotCount = Number(slotCountEl.value || 9);
-  clearIdleReels(slotCount);
 
   try {
     const response = await fetch(drawUrl, {
