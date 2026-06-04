@@ -242,6 +242,17 @@ def resolve_draw_context() -> tuple[dict | None, tuple[Response, int] | None]:
     except ValueError:
         return None, (jsonify({"error": "invalid_animate"}), 400)
 
+    try:
+        animation_seconds = parse_int_param(
+            payload.get("animation_seconds"),
+            default=10,
+            minimum=5,
+            maximum=60,
+            error_code="invalid_animation_seconds",
+        )
+    except ValueError:
+        return None, (jsonify({"error": "invalid_animation_seconds", "min": 5, "max": 60}), 400)
+
     seed_value = payload.get("seed")
     seed = None if seed_value is None or seed_value == "" else str(seed_value).strip()
 
@@ -251,6 +262,7 @@ def resolve_draw_context() -> tuple[dict | None, tuple[Response, int] | None]:
         "profile": profile,
         "unique": unique,
         "animate": animate,
+        "animation_seconds": animation_seconds,
         "seed": seed,
     }, None
 
@@ -292,6 +304,7 @@ def api_draw():
     profile = context["profile"]
     unique = context["unique"]
     animate = context["animate"]
+    animation_seconds = context["animation_seconds"]
 
     try:
         result = generate_weather_slots(
@@ -309,6 +322,7 @@ def api_draw():
             "endpoint": request.path,
             "source": "query" if request.args else "json_or_form",
             "animate": animate,
+            "animation_seconds": animation_seconds,
             "slot_count": slot_count,
             "profile": profile,
             "unique": unique,

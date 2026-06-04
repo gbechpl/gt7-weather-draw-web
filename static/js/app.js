@@ -9,6 +9,10 @@ const SPIN_SPEED = 18;
 const INITIAL_STOP_DELAY_MS = 900;
 const STOP_INTERVAL_MS = 220;
 const STOP_EASE_DURATION_MS = 260;
+const MIN_ANIMATION_SECONDS = 5;
+const MAX_ANIMATION_SECONDS = 60;
+const DEFAULT_ANIMATION_SECONDS = 10;
+const PLACEHOLDER_CODE = "?";
 
 const reelsEl = document.getElementById("reels");
 const drawBtnEl = document.getElementById("drawBtn");
@@ -19,6 +23,8 @@ const slotCountEl = document.getElementById("slotCount");
 const profileEl = document.getElementById("profile");
 const themeSelectEl = document.getElementById("themeSelect");
 const uniqueEl = document.getElementById("unique");
+const animationDurationEl = document.getElementById("animationDuration");
+const animationDurationValueEl = document.getElementById("animationDurationValue");
 
 const spriteUrl = window.GT7_DRAW_CONFIG.spriteUrl;
 const drawUrl = window.GT7_DRAW_CONFIG.drawUrl;
@@ -27,6 +33,7 @@ let reels = [];
 let animationFrameId = null;
 let finishingTimeoutIds = [];
 let currentResultText = "";
+let hasDrawnOnce = false;
 const THEME_STORAGE_KEY = "gt7-draw-theme";
 const customSelects = new Map();
 
@@ -185,6 +192,24 @@ function initTheme() {
   applyTheme(savedTheme);
 }
 
+function clampNumber(value, minimum, maximum) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function getAnimationSeconds() {
+  const parsedValue = Number(animationDurationEl?.value);
+  if (!Number.isFinite(parsedValue)) {
+    return DEFAULT_ANIMATION_SECONDS;
+  }
+  return clampNumber(Math.round(parsedValue), MIN_ANIMATION_SECONDS, MAX_ANIMATION_SECONDS);
+}
+
+function syncAnimationDurationLabel() {
+  if (animationDurationValueEl) {
+    animationDurationValueEl.textContent = `${getAnimationSeconds()} s`;
+  }
+}
+
 function randomCode() {
   return ICON_CODES[Math.floor(Math.random() * ICON_CODES.length)];
 }
@@ -197,6 +222,7 @@ function codeIndex(code) {
 function createReel(initialCode) {
   const root = document.createElement("article");
   root.className = "reel";
+  root.dataset.placeholder = "false";
 
   const slot = document.createElement("div");
   slot.className = "reel-slot";
@@ -205,6 +231,12 @@ function createReel(initialCode) {
   sprite.className = "sprite";
   sprite.style.backgroundImage = `url("${spriteUrl}")`;
   slot.appendChild(sprite);
+
+  const placeholder = document.createElement("div");
+  placeholder.className = "reel-placeholder";
+  placeholder.textContent = PLACEHOLDER_CODE;
+  placeholder.hidden = true;
+  slot.appendChild(placeholder);
 
   const code = document.createElement("div");
   code.className = "reel-code";
@@ -215,7 +247,9 @@ function createReel(initialCode) {
 
   return {
     root,
+    slot,
     sprite,
+    placeholderEl: placeholder,
     codeEl: code,
     currentCode: initialCode,
     targetCode: initialCode,
@@ -243,6 +277,29 @@ function ensureReels(count) {
   }
 }
 
+function setReelPlaceholder(reel, isPlaceholder) {
+  reel.root.dataset.placeholder = isPlaceholder ? "true" : "false";
+  reel.placeholderEl.hidden = !isPlaceholder;
+  reel.sprite.style.visibility = isPlaceholder ? "hidden" : "visible";
+
+  if (isPlaceholder) {
+    reel.codeEl.textContent = PLACEHOLDER_CODE;
+    reel.offset = 0;
+    updateSpritePosition(reel);
+  }
+}
+
+function renderIdleReels(count) {
+  ensureReels(count);
+  reels.forEach((reel) => {
+    reel.currentCode = PLACEHOLDER_CODE;
+    reel.targetCode = PLACEHOLDER_CODE;
+    reel.spinning = false;
+    resetSpriteTransition(reel);
+    setReelPlaceholder(reel, true);
+  });
+}
+
 function resetSpriteTransition(reel) {
   reel.sprite.style.transition = "none";
 }
@@ -251,6 +308,7 @@ function renderStoppedCodes(codes) {
   ensureReels(codes.length);
   codes.forEach((code, index) => {
     const reel = reels[index];
+    setReelPlaceholder(reel, false);
     reel.currentCode = code;
     reel.targetCode = code;
     reel.spinning = false;
@@ -373,6 +431,7 @@ function startClientAnimation(finalCodes) {
   clearPendingStops();
 
   reels.forEach((reel) => {
+    setReelPlaceholder(reel, false);
     reel.spinning = true;
     reel.direction = Math.random() < 0.5 ? 1 : -1;
     reel.currentCode = randomCode();
@@ -384,17 +443,32 @@ function startClientAnimation(finalCodes) {
     animationFrameId = window.requestAnimationFrame(tick);
   }
 
+  const totalAnimationMs = Math.max(
+    getAnimationSeconds() * 1000,
+    INITIAL_STOP_DELAY_MS + STOP_EASE_DURATION_MS
+  );
+  const stopIntervalMs = finalCodes.length > 1
+    ? Math.max(
+      (totalAnimationMs - INITIAL_STOP_DELAY_MS - STOP_EASE_DURATION_MS) / (finalCodes.length - 1),
+      0
+    )
+    : 0;
+
   finalCodes.forEach((code, index) => {
     const timeoutId = window.setTimeout(() => {
       stopReel(index, code);
-    }, INITIAL_STOP_DELAY_MS + (index * STOP_INTERVAL_MS));
+    }, INITIAL_STOP_DELAY_MS + (index * stopIntervalMs));
     finishingTimeoutIds.push(timeoutId);
   });
+
+  return totalAnimationMs;
 }
 
 async function runDraw() {
   drawBtnEl.disabled = true;
   statusEl.textContent = "Losowanie trwa...";
+  const animationSeconds = getAnimationSeconds();
+  const animationDurationMs = animationSeconds * 1000;
 
   try {
     const response = await fetch(drawUrl, {
@@ -404,7 +478,8 @@ async function runDraw() {
         slot_count: Number(slotCountEl.value || 9),
         profile: String(profileEl.value || "mixed"),
         unique: Boolean(uniqueEl.checked),
-        animate: true
+        animate: true,
+        animation_seconds: animationSeconds
       })
     });
 
@@ -414,6 +489,7 @@ async function runDraw() {
     }
 
     currentResultText = buildResultText(data.codes, data.profile, data.unique);
+    hasDrawnOnce = true;
     if (data.animate === false) {
       resetAnimationState();
       renderStoppedCodes(data.codes);
@@ -423,13 +499,8 @@ async function runDraw() {
       return;
     }
 
-    startClientAnimation(data.codes);
+    const totalAnimationMs = startClientAnimation(data.codes) || animationDurationMs;
     resultTextEl.textContent = "Animacja trwa...";
-
-    const totalAnimationMs =
-      INITIAL_STOP_DELAY_MS +
-      ((data.codes.length - 1) * STOP_INTERVAL_MS) +
-      STOP_EASE_DURATION_MS;
 
     window.setTimeout(() => {
       resultTextEl.textContent = currentResultText;
@@ -463,6 +534,18 @@ if (themeSelectEl) {
     applyTheme(event.target.value);
   });
 }
+if (animationDurationEl) {
+  animationDurationEl.addEventListener("input", syncAnimationDurationLabel);
+  animationDurationEl.addEventListener("change", syncAnimationDurationLabel);
+}
+if (slotCountEl) {
+  slotCountEl.addEventListener("change", () => {
+    if (!hasDrawnOnce) {
+      renderIdleReels(Number(slotCountEl.value || 9));
+    }
+  });
+}
 initCustomSelects();
 initTheme();
-renderStoppedCodes(["S01", "C01", "R01", "S05", "R07", "C03", "S12", "S17", "R02"]);
+syncAnimationDurationLabel();
+renderIdleReels(Number(slotCountEl.value || 9));

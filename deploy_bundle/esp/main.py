@@ -16,6 +16,12 @@ try:
     import urequests
 
     import config
+    from discord_state import (
+        get_last_seen_message_id,
+        is_newer_message,
+        load_seen_message_ids,
+        save_seen_message_id,
+    )
 except Exception as exc:
     log("IMPORT ERROR: {}".format(exc))
     raise
@@ -133,7 +139,7 @@ def wyslij_pomoc(webhook_url):
         )
         response.close()
     except Exception as exc:
-#        print("Blad wysylania pomocy:", exc)
+        pass
 
 
 def parse_command_text(text):
@@ -205,10 +211,10 @@ def wyslij_wynik_jako_obraz(webhook_url, profil_code, slot_count, image_url):
         if obsluz_rate_limit(response, "Webhook"):
             response.close()
             return
-        sukces = wypisz_wynik_http("Webhook", response)
+        wypisz_wynik_http("Webhook", response)
         response.close()
     except Exception as exc:
-#        print("Blad wysylania obrazu przez Webhook:", exc)
+        pass
 
 
 def przetworz_komende(tresc, webhook_url):
@@ -238,7 +244,7 @@ def wyslij_blad_formatu(webhook_url):
         wypisz_wynik_http("Webhook", response)
         response.close()
     except Exception as exc:
-#        print("Blad wysylania komunikatu o formacie:", exc)
+        pass
 
 
 def ping_keepalive():
@@ -249,7 +255,7 @@ def ping_keepalive():
     try:
         res = urequests.get(KEEPALIVE_URL, timeout=10)
     except Exception as exc:
-#        print("Blad keepalive:", exc)
+        pass
     finally:
         if res is not None:
             res.close()
@@ -333,6 +339,7 @@ if polacz_wifi():
 #    log("main: WDT setup")
     wdt = machine.WDT(timeout=60000)
 
+    load_seen_message_ids()
     headers_pobierania = {"Authorization": "Bot {}".format(DISCORD_TOKEN)}
     wykonane_komendy_ids = []
     czas_startu = time.ticks_ms()
@@ -395,11 +402,7 @@ if polacz_wifi():
                     if res.status_code != 200:
                         tresc_odpowiedzi = odczytaj_tresc_odpowiedzi(res)
                         if tresc_odpowiedzi:
-#                            print(
-#                                "Kanal: {} | Body: {}".format(
-#                                    discord_channel_id, tresc_odpowiedzi
-#                                )
-#                            )
+                            pass
                         if obsluz_rate_limit(
                             res, "Kanal {}".format(discord_channel_id)
                         ):
@@ -407,18 +410,39 @@ if polacz_wifi():
 
                     if res.status_code == 200:
                         wiadomosci = res.json()
+                        if not wiadomosci:
+                            continue
+
+                        najnowsze_id = wiadomosci[0].get("id")
+                        ostatnie_id = get_last_seen_message_id(
+                            discord_channel_id
+                        )
+
+                        if not ostatnie_id and najnowsze_id:
+                            save_seen_message_id(
+                                discord_channel_id, najnowsze_id
+                            )
+                            continue
+
                         for msg in reversed(wiadomosci):
                             tresc = msg.get("content", "").strip()
                             msg_id = msg.get("id")
                             autor_bot = msg.get("author", {}).get("bot", False)
 
-                            if autor_bot or (msg_id in wykonane_komendy_ids):
+                            if (
+                                autor_bot
+                                or (msg_id in wykonane_komendy_ids)
+                                or not is_newer_message(msg_id, ostatnie_id)
+                            ):
                                 continue
 
                             tresc_lc = tresc.lower()
 
                             if tresc_lc in ("!pogoda ?", "!pogoda help"):
                                 wykonane_komendy_ids.append(msg_id)
+                                save_seen_message_id(
+                                    discord_channel_id, msg_id
+                                )
 #                                print(
 #                                    "Wykryto prośbę o pomoc na kanale {}".format(
 #                                        discord_channel_id
@@ -429,15 +453,14 @@ if polacz_wifi():
 
                             elif tresc_lc.startswith("!pogoda "):
                                 wykonane_komendy_ids.append(msg_id)
+                                save_seen_message_id(
+                                    discord_channel_id, msg_id
+                                )
                                 przetworz_komende(tresc, discord_webhook_url)
                                 wdt.feed()
 
                 except Exception as inner_exc:
-#                    print(
-#                        "Blad podczas obslugi kanalu {}: {}".format(
-#                            discord_channel_id, inner_exc
-#                        )
-#                    )
+                    pass
                 finally:
                     if res is not None:
                         res.close()
@@ -454,7 +477,7 @@ if polacz_wifi():
                 wykonane_komendy_ids.pop(0)
 
         except Exception as exc:
-#            print("Glowny blad petli, ponawiam...", exc)
+            pass
 
 #        print(
 #            "Caly obieg petli: {} ms".format(
@@ -463,4 +486,4 @@ if polacz_wifi():
 #        )
         time.sleep_ms(LOOP_IDLE_DELAY_MS)
 else:
-#    print("MAIN STOP: Wi-Fi connection failed, script ended.")
+    pass

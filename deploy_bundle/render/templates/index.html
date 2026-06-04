@@ -67,6 +67,14 @@
         </label>
 
         <button id="drawBtn" class="draw-btn" type="button">Losuj pogodę</button>
+        <label class="field">
+          <span>Czas animacji</span>
+          <div class="range-field">
+            <input id="animationDuration" type="range" min="5" max="60" value="10" step="1" />
+            <output id="animationDurationValue" class="range-value" for="animationDuration">10 s</output>
+          </div>
+        </label>
+
         <p id="status" class="status">Gotowy do losowania</p>
       </div>
     </section>

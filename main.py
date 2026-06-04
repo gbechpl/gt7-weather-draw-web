@@ -17,6 +17,12 @@ try:
     import urequests
 
     import config
+    from discord_state import (
+        get_last_seen_message_id,
+        is_newer_message,
+        load_seen_message_ids,
+        save_seen_message_id,
+    )
 except Exception as exc:
     log("IMPORT ERROR: {}".format(exc))
     raise
@@ -250,6 +256,7 @@ if polacz_wifi():
 
     wdt = machine.WDT(timeout=60000)
 
+    load_seen_message_ids()
     headers_pobierania = {"Authorization": "Bot {}".format(DISCORD_TOKEN)}
     wykonane_komendy_ids = []
     czas_startu = time.ticks_ms()
@@ -290,23 +297,47 @@ if polacz_wifi():
 
                     if res.status_code == 200:
                         wiadomosci = res.json()
+                        if not wiadomosci:
+                            continue
+
+                        najnowsze_id = wiadomosci[0].get("id")
+                        ostatnie_id = get_last_seen_message_id(
+                            discord_channel_id
+                        )
+
+                        if not ostatnie_id and najnowsze_id:
+                            save_seen_message_id(
+                                discord_channel_id, najnowsze_id
+                            )
+                            continue
+
                         for msg in reversed(wiadomosci):
                             tresc = msg.get("content", "").strip()
                             msg_id = msg.get("id")
                             autor_bot = msg.get("author", {}).get("bot", False)
 
-                            if autor_bot or (msg_id in wykonane_komendy_ids):
+                            if (
+                                autor_bot
+                                or (msg_id in wykonane_komendy_ids)
+                                or not is_newer_message(msg_id, ostatnie_id)
+                            ):
                                 continue
 
                             tresc_lc = tresc.lower()
 
                             if tresc_lc in ("!pogoda ?", "!pogoda help"):
                                 wykonane_komendy_ids.append(msg_id)
+                                save_seen_message_id(
+                                    discord_channel_id, msg_id
+                                )
                                 wyslij_pomoc(discord_webhook_url)
                                 wdt.feed()
 
                             elif tresc_lc.startswith("!pogoda "):
                                 wykonane_komendy_ids.append(msg_id)
+                                save_seen_message_id(
+                                    discord_channel_id, msg_id
+                                )
                                 przetworz_komende(tresc, discord_webhook_url)
                                 wdt.feed()
 
